@@ -2,7 +2,7 @@
 
 class Camera;
 class Interface;
-struct ComputeConfig;
+class ComputeConfig;
 
 class Controls {
  public:

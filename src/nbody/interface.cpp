@@ -12,8 +12,14 @@
 #include <GL/freeglut.h>
 
 #include <format>
+#include <memory>
 
-auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer& renderer) -> void {
+Interface::Interface(bool display_sliders, ParamListGL parameters, bool enable_fullscreen, ParticleRenderer renderer) noexcept
+    : show_sliders_(display_sliders), param_list(std::move(parameters)), full_screen(enable_fullscreen), renderer_(std::move(renderer)) {
+    param_list.add_param(std::make_unique<Param<float>>("Point Size", point_size_, 0.001f, 10.0f, 0.01f, &point_size_));
+}
+
+auto Interface::display(ComputeConfig& compute, Camera& camera) -> void {
     compute.update_simulation(camera);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -21,7 +27,7 @@ auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer
     if (display_enabled) {
         camera.view_transform();
 
-        compute.display_NBody_system(display_mode, renderer);
+        compute.display_NBody_system(*this);
 
         // display user interface
         if (show_sliders_) {
@@ -92,4 +98,18 @@ auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer
 auto Interface::special(int key, int x, int y) -> void {
     param_list.special(key, x, y);
     glutPostRedisplay();
+}
+
+auto Interface::display_nbody_system(std::span<const float> positions) -> void {
+    renderer_.display(display_mode, point_size_, positions);
+}
+auto Interface::display_nbody_system(std::span<const double> positions) -> void {
+    renderer_.display(display_mode, point_size_, positions);
+}
+
+auto Interface::display_nbody_system_fp32(unsigned int pbo) -> void {
+    renderer_.display<float>(display_mode, point_size_, pbo);
+}
+auto Interface::display_nbody_system_fp64(unsigned int pbo) -> void {
+    renderer_.display<double>(display_mode, point_size_, pbo);
 }

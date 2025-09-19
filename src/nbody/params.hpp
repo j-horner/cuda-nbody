@@ -13,7 +13,6 @@ struct NBodyParams {
     float                m_velocityScale;
     float                m_softening;
     float                m_damping;
-    float                m_pointSize;
     std::array<float, 3> camera_origin;
 
     auto print() const -> void;

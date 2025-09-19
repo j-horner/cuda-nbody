@@ -29,8 +29,7 @@
 
 #include "bodysystemcpu.hpp"
 
-#include "compute.hpp"
-#include "helper_cuda.hpp"
+#include "params.hpp"
 #include "randomise_bodies.hpp"
 #include "tipsy.hpp"
 #include "vec.hpp"
@@ -50,14 +49,15 @@
 
 using std::ranges::copy;
 
-template <std::floating_point T> BodySystemCPU<T>::BodySystemCPU(int nb_bodies, const NBodyParams& params) : m_numBodies(nb_bodies), m_pos(m_numBodies * 4, T{0}), m_vel(m_numBodies * 4, T{0}), m_damping(params.m_damping) {
+template <std::floating_point T>
+BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params) : m_numBodies(nb_bodies), m_pos(m_numBodies * 4, T{0}), m_vel(m_numBodies * 4, T{0}), m_damping(params.m_damping) {
     setSoftening(params.m_softening);
 
     reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
 template <std::floating_point T>
-BodySystemCPU<T>::BodySystemCPU(int nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
     : m_numBodies(nb_bodies), m_pos(std::move(positions)), m_vel(std::move(velocities)), m_damping(params.m_damping) {
     assert(m_pos.size() == m_numBodies * 4);
     assert(m_vel.size() == m_pos.size());

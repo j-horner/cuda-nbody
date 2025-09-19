@@ -29,7 +29,7 @@
 
 #include "bodysystemcuda.hpp"
 
-#include "compute.hpp"
+#include "compute_cuda.hpp"
 #include "gl_includes.hpp"
 #include "helper_cuda.hpp"
 #include "randomise_bodies.hpp"
@@ -62,26 +62,26 @@ cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeConfig& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId)
-    : m_numBodies(compute.nb_bodies()), m_numDevices(numDevices), m_bUsePBO(compute.use_pbo()), m_bUseSysMem(compute.use_host_mem()), m_bUseP2P(useP2P), m_blockSize(blockSize), m_devID(deviceId),
-      m_damping(compute.active_params().m_damping) {
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params)
+    : m_numBodies(static_cast<unsigned int>(compute.nb_bodies())), m_numDevices(numDevices), m_bUsePBO(compute.use_pbo()), m_bUseSysMem(compute.use_host_mem()), m_bUseP2P(useP2P), m_blockSize(blockSize), m_devID(deviceId),
+      m_damping(params.m_damping) {
     _initialize(m_numBodies);
 
-    setSoftening(compute.active_params().m_softening);
+    setSoftening(params.m_softening);
 
-    reset(compute.active_params(), NBodyConfig::NBODY_CONFIG_SHELL);
+    reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeConfig& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, std::vector<T> positions, std::vector<T> velocities)
-    : m_numBodies(compute.nb_bodies()), m_numDevices(numDevices), m_bUsePBO(compute.use_pbo()), m_bUseSysMem(compute.use_host_mem()), m_bUseP2P(useP2P), m_blockSize(blockSize), m_devID(deviceId),
-      m_hPos_vec(std::move(positions)), m_hVel_vec(std::move(velocities)), m_damping(compute.active_params().m_damping) {
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : m_numBodies(static_cast<unsigned int>(compute.nb_bodies())), m_numDevices(numDevices), m_bUsePBO(compute.use_pbo()), m_bUseSysMem(compute.use_host_mem()), m_bUseP2P(useP2P), m_blockSize(blockSize), m_devID(deviceId),
+      m_hPos_vec(std::move(positions)), m_hVel_vec(std::move(velocities)), m_damping(params.m_damping) {
     assert(m_hPos_vec.size() == m_numBodies);
     assert(m_hVel_vec.size() == m_numBodies);
 
     _initialize(m_numBodies);
 
-    setSoftening(compute.active_params().m_softening);
+    setSoftening(params.m_softening);
 
     set_position(m_hPos_vec);
     set_velocity(m_hVel_vec);

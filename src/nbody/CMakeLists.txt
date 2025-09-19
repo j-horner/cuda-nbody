@@ -14,6 +14,8 @@ add_library(${PROJECT_NAME}_bodysystemcuda STATIC bodysystemcuda.cu bodysystemcu
 add_library(${PROJECT_NAME}_bodysystemcpu STATIC bodysystemcpu.cpp)
 
 add_library(${PROJECT_NAME}_compute STATIC compute.cpp)
+add_library(${PROJECT_NAME}_compute_cpu STATIC compute_cpu.cpp)
+add_library(${PROJECT_NAME}_compute_cuda STATIC compute_cuda.cpp)
 add_library(${PROJECT_NAME}_camera STATIC camera.cpp)
 add_library(${PROJECT_NAME}_interface STATIC interface.cpp)
 add_library(${PROJECT_NAME}_controls STATIC controls.cpp)
@@ -27,18 +29,43 @@ target_link_libraries(${PROJECT_NAME}_paramgl PRIVATE GLUT::GLUT ${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME}_tipsy PRIVATE CUDA::cudart_static)
 target_link_libraries(${PROJECT_NAME}_randomise_bodies PRIVATE CUDA::cudart_static)
-target_link_libraries(${PROJECT_NAME}_bodysystemcpu PRIVATE CUDA::cudart_static ${PROJECT_NAME}_tipsy ${PROJECT_NAME}_randomise_bodies)
+target_link_libraries(${PROJECT_NAME}_bodysystemcpu
+                        PRIVATE
+                            CUDA::cudart_static
+                            ${PROJECT_NAME}_tipsy
+                            ${PROJECT_NAME}_randomise_bodies
+                            ${PROJECT_NAME}_compute)
 
-target_link_libraries(${PROJECT_NAME}_bodysystemcuda PRIVATE CUDA::cudart_static GLUT::GLUT ${PROJECT_NAME}_randomise_bodies)
+target_link_libraries(${PROJECT_NAME}_bodysystemcuda
+                        PRIVATE
+                            ${PROJECT_NAME}_compute_cuda    
+                            ${PROJECT_NAME}_randomise_bodies
+                            CUDA::cudart_static
+                            GLUT::GLUT)
 
 target_link_libraries(${PROJECT_NAME}_camera PRIVATE GLEW::GLEW OpenGL::GL)
 target_link_libraries(${PROJECT_NAME}_compute
                         PUBLIC
-                            CUDA::cudart_static
+                            cuda-api-wrappers::rtc cuda-api-wrappers::nvtx cuda-api-wrappers::runtime-and-driver cuda-api-wrappers::fatbin
                         PRIVATE
+                            ${PROJECT_NAME}_compute_cpu
+                            ${PROJECT_NAME}_compute_cuda
                             ${PROJECT_NAME}_bodysystemcpu
                             ${PROJECT_NAME}_bodysystemcuda
-                            ${PROJECT_NAME}_render_particles)
+                            ${PROJECT_NAME}_render_particles
+                            ${PROJECT_NAME}_interface)
+
+target_link_libraries(${PROJECT_NAME}_compute_cuda
+                        PUBLIC
+                            CUDA::cudart_static
+                        PRIVATE
+                            ${PROJECT_NAME}_interface
+                            ${PROJECT_NAME}_bodysystemcuda)
+
+target_link_libraries(${PROJECT_NAME}_compute_cpu
+                        PRIVATE
+                            ${PROJECT_NAME}_interface
+                            ${PROJECT_NAME}_bodysystemcpu)
 
 target_link_libraries(${PROJECT_NAME}_controls PUBLIC GLUT::GLUT ${PROJECT_NAME}_compute ${PROJECT_NAME}_interface)
 

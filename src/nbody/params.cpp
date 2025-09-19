@@ -7,7 +7,7 @@
 #include <print>
 
 auto NBodyParams::print() const -> void {
-    std::println("{{ {}, {}, {}, {}, {}, {}, {}, {}, {} }},", m_timestep, m_clusterScale, m_velocityScale, m_softening, m_damping, m_pointSize, camera_origin[0], camera_origin[1], camera_origin[2]);
+    std::println("{{ {}, {}, {}, {}, {}, {}, {}, {} }},", m_timestep, m_clusterScale, m_velocityScale, m_softening, m_damping, camera_origin[0], camera_origin[1], camera_origin[2]);
 }
 
 auto NBodyParams::create_sliders() -> ParamListGL {
@@ -15,9 +15,6 @@ auto NBodyParams::create_sliders() -> ParamListGL {
     auto paramlist = ParamListGL{};
 
     // add some parameters to the list
-
-    // Point Size
-    paramlist.add_param(std::make_unique<Param<float>>("Point Size", m_pointSize, 0.001f, 10.0f, 0.01f, &m_pointSize));
 
     // Velocity Damping
     paramlist.add_param(std::make_unique<Param<float>>("Velocity Damping", m_damping, 0.5f, 1.0f, .0001f, &m_damping));

@@ -33,7 +33,6 @@
 #include <span>
 #include <vector>
 
-struct ComputeConfig;
 struct NBodyParams;
 
 // CPU Body System
@@ -42,9 +41,9 @@ template <std::floating_point T> class BodySystemCPU {
     using Type                    = T;
     constexpr static auto use_cpu = true;
 
-    BodySystemCPU(int nb_bodies, const NBodyParams& params);
+    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params);
 
-    BodySystemCPU(int nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
@@ -55,6 +54,9 @@ template <std::floating_point T> class BodySystemCPU {
     auto get_position() const noexcept -> std::span<const T> { return m_pos; }
     auto get_velocity() const noexcept -> std::span<const T> { return m_vel; }
 
+    auto get_position() noexcept -> std::span<T> { return m_pos; }
+    auto get_velocity() noexcept -> std::span<T> { return m_vel; }
+
     auto set_position(std::span<const T> data) noexcept -> void;
     auto set_velocity(std::span<const T> data) noexcept -> void;
 
@@ -63,7 +65,7 @@ template <std::floating_point T> class BodySystemCPU {
 
     auto _computeNBodyGravitation() noexcept -> void;
 
-    int m_numBodies;
+    std::size_t m_numBodies;
 
     std::vector<T> m_pos;
     std::vector<T> m_vel;

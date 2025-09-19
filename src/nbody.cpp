@@ -294,15 +294,13 @@ int main(int argc, char** argv) {
             return static_cast<int>(!result);
         }
 
-        auto renderer = ParticleRenderer(compute.nb_bodies());
-
-        auto interface = Interface{show_sliders, compute.create_sliders(), full_screen};
+        auto interface = Interface{show_sliders, compute.create_sliders(), full_screen, ParticleRenderer(compute.nb_bodies())};
 
         auto camera = Camera{};
 
         auto controls = Controls{};
 
-        execute_graphics_loop(compute, interface, camera, controls, renderer);
+        execute_graphics_loop(compute, interface, camera, controls);
 
         std::println("Stopped graphics loop");
 

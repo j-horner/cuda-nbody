@@ -36,7 +36,7 @@
 #include <span>
 #include <vector>
 
-struct ComputeConfig;
+class ComputeCUDA;
 struct NBodyParams;
 
 template <typename T> struct DeviceData {
@@ -53,8 +53,9 @@ template <std::floating_point T> class BodySystemCUDA {
     using Type                    = T;
     constexpr static auto use_cpu = false;
 
-    BodySystemCUDA(const ComputeConfig& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId);
-    BodySystemCUDA(const ComputeConfig& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+
     ~BodySystemCUDA() noexcept;
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
