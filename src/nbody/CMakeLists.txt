@@ -45,8 +45,6 @@ target_link_libraries(${PROJECT_NAME}_bodysystemcuda
 
 target_link_libraries(${PROJECT_NAME}_camera PRIVATE GLEW::GLEW OpenGL::GL)
 target_link_libraries(${PROJECT_NAME}_compute
-                        PUBLIC
-                            cuda-api-wrappers::rtc cuda-api-wrappers::nvtx cuda-api-wrappers::runtime-and-driver cuda-api-wrappers::fatbin
                         PRIVATE
                             ${PROJECT_NAME}_compute_cpu
                             ${PROJECT_NAME}_compute_cuda
