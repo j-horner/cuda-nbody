@@ -82,23 +82,23 @@ ComputeConfig::ComputeConfig(
     }
 
     if (num_bodies_ <= 1024) {
-        active_params_.m_clusterScale  = 1.52f;
-        active_params_.m_velocityScale = 2.f;
+        active_params_.cluster_scale  = 1.52f;
+        active_params_.velocity_scale = 2.f;
     } else if (num_bodies_ <= 2048) {
-        active_params_.m_clusterScale  = 1.56f;
-        active_params_.m_velocityScale = 2.64f;
+        active_params_.cluster_scale  = 1.56f;
+        active_params_.velocity_scale = 2.64f;
     } else if (num_bodies_ <= 4096) {
-        active_params_.m_clusterScale  = 1.68f;
-        active_params_.m_velocityScale = 2.98f;
+        active_params_.cluster_scale  = 1.68f;
+        active_params_.velocity_scale = 2.98f;
     } else if (num_bodies_ <= 8192) {
-        active_params_.m_clusterScale  = 1.98f;
-        active_params_.m_velocityScale = 2.9f;
+        active_params_.cluster_scale  = 1.98f;
+        active_params_.velocity_scale = 2.9f;
     } else if (num_bodies_ <= 16384) {
-        active_params_.m_clusterScale  = 1.54f;
-        active_params_.m_velocityScale = 8.f;
+        active_params_.cluster_scale  = 1.54f;
+        active_params_.velocity_scale = 8.f;
     } else if (num_bodies_ <= 32768) {
-        active_params_.m_clusterScale  = 1.44f;
-        active_params_.m_velocityScale = 11.f;
+        active_params_.cluster_scale  = 1.44f;
+        active_params_.velocity_scale = 11.f;
     }
 
     if (tipsy_file.empty()) {
@@ -168,7 +168,7 @@ auto ComputeConfig::select_demo(Camera& camera) -> void {
 
     assert(active_demo_ < nb_demos);
 
-    active_params_ = demoParams[active_demo_];
+    active_params_ = demo_params[active_demo_];
 
     camera.reset(active_params_.camera_origin);
 
@@ -205,9 +205,9 @@ auto ComputeConfig::update_simulation(Camera& camera) -> void {
         }
 
         if (use_cpu_) {
-            compute_cpu_->update(active_params_.m_timestep);
+            compute_cpu_->update(active_params_.time_step);
         } else {
-            compute_cuda_->update(active_params_.m_timestep);
+            compute_cuda_->update(active_params_.time_step);
         }
     }
 }
@@ -270,7 +270,7 @@ auto ComputeConfig::calculate_fps(int frame_count) -> void {
 }
 
 auto ComputeConfig::run_benchmark(int nb_iterations) -> void {
-    const auto milliseconds = use_cpu_ ? compute_cpu_->run_benchmark(nb_iterations, active_params_.m_timestep) : compute_cuda_->run_benchmark(nb_iterations, active_params_.m_timestep);
+    const auto milliseconds = use_cpu_ ? compute_cpu_->run_benchmark(nb_iterations, active_params_.time_step) : compute_cuda_->run_benchmark(nb_iterations, active_params_.time_step);
 
     print_benchmark_results(nb_iterations, milliseconds);
 }
@@ -282,14 +282,14 @@ auto ComputeConfig::compare_results() -> bool {
 
 auto ComputeConfig::add_modifiable_parameters(ParamListGL& param_list) -> void {
     // Velocity Damping
-    param_list.add_param(std::make_unique<Param<float>>("Velocity Damping", active_params_.m_damping, 0.5f, 1.0f, .0001f, &active_params_.m_damping));
+    param_list.add_param(std::make_unique<Param<float>>("Velocity Damping", active_params_.damping, 0.5f, 1.0f, .0001f, &active_params_.damping));
     // Softening Factor
-    param_list.add_param(std::make_unique<Param<float>>("Softening Factor", active_params_.m_softening, 0.001f, 1.0f, .0001f, &active_params_.m_softening));
+    param_list.add_param(std::make_unique<Param<float>>("Softening Factor", active_params_.softening, 0.001f, 1.0f, .0001f, &active_params_.softening));
     // Time step size
-    param_list.add_param(std::make_unique<Param<float>>("Time Step", active_params_.m_timestep, 0.0f, 1.0f, .0001f, &active_params_.m_timestep));
+    param_list.add_param(std::make_unique<Param<float>>("Time Step", active_params_.time_step, 0.0f, 1.0f, .0001f, &active_params_.time_step));
     // Cluster scale (only affects starting configuration
-    param_list.add_param(std::make_unique<Param<float>>("Cluster Scale", active_params_.m_clusterScale, 0.0f, 10.0f, 0.01f, &active_params_.m_clusterScale));
+    param_list.add_param(std::make_unique<Param<float>>("Cluster Scale", active_params_.cluster_scale, 0.0f, 10.0f, 0.01f, &active_params_.cluster_scale));
 
     // Velocity scale (only affects starting configuration)
-    param_list.add_param(std::make_unique<Param<float>>("Velocity Scale", active_params_.m_velocityScale, 0.0f, 1000.0f, 0.1f, &active_params_.m_velocityScale));
+    param_list.add_param(std::make_unique<Param<float>>("Velocity Scale", active_params_.velocity_scale, 0.0f, 1000.0f, 0.1f, &active_params_.velocity_scale));
 }

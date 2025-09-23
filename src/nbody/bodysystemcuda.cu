@@ -90,11 +90,11 @@ template <> __device__ double getSofteningSquared<double>() {
 }
 
 template <typename T> struct DeviceData {
-    T*           dPos[2];    // mapped host pointers
-    T*           dVel;
+    T*           pos[2];    // mapped host pointers
+    T*           vel;
     cudaEvent_t  event;
     unsigned int offset;
-    unsigned int numBodies;
+    unsigned int nb_bodies;
 };
 
 template <typename T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
@@ -202,8 +202,8 @@ void integrateNbodySystem(
         checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[1 - currentRead], cudaGraphicsMapFlagsWriteDiscard));
         checkCudaErrors(cudaGraphicsMapResources(2, pgres, 0));
         size_t bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].dPos[currentRead]), &bytes, pgres[currentRead]));
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].dPos[1 - currentRead]), &bytes, pgres[1 - currentRead]));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].pos[currentRead]), &bytes, pgres[currentRead]));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].pos[1 - currentRead]), &bytes, pgres[1 - currentRead]));
     }
 
     for (unsigned int dev = 0; dev != numDevices; dev++) {
@@ -211,16 +211,16 @@ void integrateNbodySystem(
             cudaSetDevice(dev);
         }
 
-        int numBlocks     = (deviceData[dev].numBodies + blockSize - 1) / blockSize;
+        int numBlocks     = (deviceData[dev].nb_bodies + blockSize - 1) / blockSize;
         int numTiles      = (numBodies + blockSize - 1) / blockSize;
         int sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
 
         integrateBodies<T><<<numBlocks, blockSize, sharedMemSize>>>(
-            (vec4<T>*)deviceData[dev].dPos[1 - currentRead],
-            (vec4<T>*)deviceData[dev].dPos[currentRead],
-            (vec4<T>*)deviceData[dev].dVel,
+            (vec4<T>*)deviceData[dev].pos[1 - currentRead],
+            (vec4<T>*)deviceData[dev].pos[currentRead],
+            (vec4<T>*)deviceData[dev].vel,
             deviceData[dev].offset,
-            deviceData[dev].numBodies,
+            deviceData[dev].nb_bodies,
             deltaTime,
             damping,
             numTiles);

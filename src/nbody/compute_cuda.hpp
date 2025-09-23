@@ -30,7 +30,7 @@ class ComputeCUDA {
                 std::vector<double> positions_fp64,
                 std::vector<double> velocities_fp64);
 
-    auto nb_bodies() const noexcept { return num_bodies_; }
+    auto nb_bodies() const noexcept { return nb_bodies_; }
     auto use_pbo() const noexcept { return use_pbo_; }
     auto use_host_mem() const noexcept { return use_host_mem_; }
 
@@ -65,7 +65,7 @@ class ComputeCUDA {
 
     template <std::floating_point T> auto compare_results(const NBodyParams& params, BodySystemCUDA<T>& nbodyCuda) const -> bool;
 
-    std::size_t num_bodies_;
+    std::size_t nb_bodies_;
 
     bool fp64_enabled_;
 

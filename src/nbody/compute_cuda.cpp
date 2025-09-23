@@ -152,28 +152,28 @@ ComputeCUDA::ComputeCUDA(
 
     // default number of bodies is #SMs * 4 * CTA size
     if (nb_devices_requested == 1) {
-        num_bodies_ = num_bodies != 0 ? num_bodies : blockSize * 4 * cuda_properties.multiProcessorCount;
+        nb_bodies_ = num_bodies != 0 ? num_bodies : blockSize * 4 * cuda_properties.multiProcessorCount;
     } else {
-        num_bodies_ = 0;
+        nb_bodies_ = 0;
         for (auto i = 0; i < nb_devices_requested; ++i) {
             auto properties = cudaDeviceProp{};
             checkCudaErrors(cudaGetDeviceProperties(&properties, i));
-            num_bodies_ += blockSize * (properties.major >= 2 ? 4 : 1) * properties.multiProcessorCount;
+            nb_bodies_ += blockSize * (properties.major >= 2 ? 4 : 1) * properties.multiProcessorCount;
         }
     }
 
     if (num_bodies != 0u) {
-        num_bodies_ = num_bodies;
+        nb_bodies_ = num_bodies;
 
-        assert(num_bodies_ >= 1);
+        assert(nb_bodies_ >= 1);
 
-        if (num_bodies_ % blockSize) {
-            auto new_nb_bodies = ((num_bodies_ / blockSize) + 1) * blockSize;
-            std::println(R"(Warning: "number of bodies" specified {} is not a multiple of {}.)", num_bodies_, blockSize);
+        if (nb_bodies_ % blockSize) {
+            auto new_nb_bodies = ((nb_bodies_ / blockSize) + 1) * blockSize;
+            std::println(R"(Warning: "number of bodies" specified {} is not a multiple of {}.)", nb_bodies_, blockSize);
             std::println("Rounding up to the nearest multiple: {}.", new_nb_bodies);
-            num_bodies_ = new_nb_bodies;
+            nb_bodies_ = new_nb_bodies;
         } else {
-            std::println("number of bodies = {}", num_bodies_);
+            std::println("number of bodies = {}", nb_bodies_);
         }
     }
 
@@ -203,7 +203,7 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCUDA::
 
     fp64_enabled_ = std::is_same_v<TNew, double>;
 
-    const auto nb_bodies_4 = static_cast<std::size_t>(num_bodies_ * 4);
+    const auto nb_bodies_4 = static_cast<std::size_t>(nb_bodies_ * 4);
 
     auto oldPos = std::vector<TOld>(nb_bodies_4);
     auto oldVel = std::vector<TOld>(nb_bodies_4);
@@ -349,7 +349,7 @@ template <std::floating_point T> auto ComputeCUDA::compare_results(const NBodyPa
     nbodyCuda.update(0.001f);
 
     {
-        auto nbodyCpu = BodySystemCPU<T>(num_bodies_, params);
+        auto nbodyCpu = BodySystemCPU<T>(nb_bodies_, params);
 
         nbodyCpu.set_position(nbodyCuda.get_position());
         nbodyCpu.set_velocity(nbodyCuda.get_velocity());
@@ -361,7 +361,7 @@ template <std::floating_point T> auto ComputeCUDA::compare_results(const NBodyPa
 
         constexpr auto tolerance = T{0.0005f};
 
-        for (int i = 0; i < num_bodies_; i++) {
+        for (int i = 0; i < nb_bodies_; i++) {
             if (std::abs(cpuPos[i] - cudaPos[i]) > tolerance) {
                 passed = false;
                 std::println("Error: (host){} != (device){}", cpuPos[i], cudaPos[i]);

@@ -51,28 +51,28 @@ template <std::floating_point T> class BodySystemCPU {
 
     auto update_params(const NBodyParams& active_params) noexcept -> void;
 
-    auto get_position() const noexcept -> std::span<const T> { return m_pos; }
-    auto get_velocity() const noexcept -> std::span<const T> { return m_vel; }
+    auto get_position() const noexcept -> std::span<const T> { return pos_; }
+    auto get_velocity() const noexcept -> std::span<const T> { return vel_; }
 
-    auto get_position() noexcept -> std::span<T> { return m_pos; }
-    auto get_velocity() noexcept -> std::span<T> { return m_vel; }
+    auto get_position() noexcept -> std::span<T> { return pos_; }
+    auto get_velocity() noexcept -> std::span<T> { return vel_; }
 
     auto set_position(std::span<const T> data) noexcept -> void;
     auto set_velocity(std::span<const T> data) noexcept -> void;
 
  private:
-    auto setSoftening(T softening) noexcept -> void { m_softeningSquared = softening * softening; }
+    auto setSoftening(T softening) noexcept -> void { softening_squared_ = softening * softening; }
 
     auto _computeNBodyGravitation() noexcept -> void;
 
-    std::size_t m_numBodies;
+    std::size_t nb_bodies_;
 
-    std::vector<T> m_pos;
-    std::vector<T> m_vel;
-    std::vector<T> m_force = std::vector(m_numBodies * 3, T{0.f});
+    std::vector<T> pos_;
+    std::vector<T> vel_;
+    std::vector<T> force_ = std::vector(nb_bodies_ * 3, T{0.f});
 
-    T m_softeningSquared = 0.00125f;
-    T m_damping          = 0.995f;
+    T softening_squared_ = 0.00125f;
+    T damping_           = 0.995f;
 };
 
 extern template BodySystemCPU<float>;

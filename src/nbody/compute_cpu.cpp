@@ -28,20 +28,20 @@ ComputeCPU::ComputeCPU(double              fp64_enabled,
 #ifdef OPENMP
     num_bodies_ = 8192;
 #else
-    num_bodies_ = 4096;
+    nb_bodies_ = 4096;
 #endif
 
     if (num_bodies != 0u) {
-        num_bodies_ = num_bodies;
-        std::println("number of bodies = {}", num_bodies_);
+        nb_bodies_ = num_bodies;
+        std::println("number of bodies = {}", nb_bodies_);
     }
 
     if (!positions_fp64.empty()) {
-        nbody_fp32_ = std::make_unique<BodySystemCPU<float>>(num_bodies_, params, std::move(positions_fp32), std::move(velocities_fp32));
-        nbody_fp64_ = std::make_unique<BodySystemCPU<double>>(num_bodies_, params, std::move(positions_fp64), std::move(velocities_fp64));
+        nbody_fp32_ = std::make_unique<BodySystemCPU<float>>(nb_bodies_, params, std::move(positions_fp32), std::move(velocities_fp32));
+        nbody_fp64_ = std::make_unique<BodySystemCPU<double>>(nb_bodies_, params, std::move(positions_fp64), std::move(velocities_fp64));
     } else {
-        nbody_fp32_ = std::make_unique<BodySystemCPU<float>>(num_bodies_, params);
-        nbody_fp64_ = std::make_unique<BodySystemCPU<double>>(num_bodies_, params);
+        nbody_fp32_ = std::make_unique<BodySystemCPU<float>>(nb_bodies_, params);
+        nbody_fp64_ = std::make_unique<BodySystemCPU<double>>(nb_bodies_, params);
     }
 
     reset_time_ = Clock::now();
@@ -52,7 +52,7 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCPU::s
 
     fp64_enabled_ = std::is_same_v<TNew, double>;
 
-    const auto nb_bodies_4 = static_cast<std::size_t>(num_bodies_ * 4);
+    const auto nb_bodies_4 = static_cast<std::size_t>(nb_bodies_ * 4);
 
     const auto old_pos = old_nbody.get_position();
     const auto old_vel = old_nbody.get_velocity();

@@ -6,11 +6,11 @@
 // Demo Parameters
 ////////////////////////////////////////
 struct NBodyParams {
-    float                m_timestep;
-    float                m_clusterScale;
-    float                m_velocityScale;
-    float                m_softening;
-    float                m_damping;
+    float                time_step;
+    float                cluster_scale;
+    float                velocity_scale;
+    float                softening;
+    float                damping;
     std::array<float, 3> camera_origin;
 
     auto print() const -> void;

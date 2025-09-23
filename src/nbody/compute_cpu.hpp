@@ -24,7 +24,7 @@ class ComputeCPU {
                std::vector<double> positions_fp64,
                std::vector<double> velocities_fp64);
 
-    auto nb_bodies() const noexcept { return num_bodies_; }
+    auto nb_bodies() const noexcept { return nb_bodies_; }
 
     auto switch_precision() -> void;
 
@@ -53,7 +53,7 @@ class ComputeCPU {
 
     template <std::floating_point T> auto run_benchmark(int nb_iterations, float dt, BodySystemCPU<T>& nbody) -> float;
 
-    std::size_t num_bodies_;
+    std::size_t nb_bodies_;
 
     bool fp64_enabled_;
 

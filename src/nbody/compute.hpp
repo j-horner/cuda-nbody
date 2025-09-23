@@ -79,7 +79,7 @@ class ComputeConfig {
 
     auto get_milliseconds_passed() -> float;
 
-    constexpr static auto demoParams = std::array{
+    constexpr static auto demo_params = std::array{
         NBodyParams{0.016f, 1.54f, 8.0f, 0.1f, 1.0f, 0, -2, -100},
         NBodyParams{0.016f, 0.68f, 20.0f, 0.1f, 1.0f, 0, -2, -30},
         NBodyParams{0.0006f, 0.16f, 1000.0f, 1.0f, 1.0f, 0, 0, -15},
@@ -88,7 +88,7 @@ class ComputeConfig {
         NBodyParams{0.0016f, 0.32f, 272.0f, 0.145f, 1.0f, 0, 0, -50},
         NBodyParams{0.016f, 6.04f, 0.0f, 1.0f, 1.0f, 0, 0, -50}};
 
-    constexpr static auto nb_demos = demoParams.size();
+    constexpr static auto nb_demos = demo_params.size();
 
     constexpr static auto demo_time = std::chrono::seconds(10);
 
@@ -102,7 +102,7 @@ class ComputeConfig {
     float       g_flops_                 = 0.f;
     float       fps_                     = 0.f;
     float       interactions_per_second_ = 0.f;
-    NBodyParams active_params_           = demoParams[0];
+    NBodyParams active_params_           = demo_params[0];
 
     std::unique_ptr<ComputeCPU>  compute_cpu_;
     std::unique_ptr<ComputeCUDA> compute_cuda_;
