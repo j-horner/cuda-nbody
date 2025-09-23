@@ -1,16 +1,15 @@
 #include "compute.hpp"
 
-#include "bodysystemcpu.hpp"
-#include "bodysystemcuda.hpp"
 #include "camera.hpp"
 #include "compute_cpu.hpp"
 #include "compute_cuda.hpp"
-#include "helper_cuda.hpp"
 #include "interface.hpp"
-#include "render_particles.hpp"
+#include "param.hpp"
+#include "paramgl.hpp"
 #include "tipsy.hpp"
 
 #include <chrono>
+#include <memory>
 #include <print>
 
 namespace {
@@ -279,4 +278,18 @@ auto ComputeConfig::run_benchmark(int nb_iterations) -> void {
 auto ComputeConfig::compare_results() -> bool {
     assert(compute_cuda_);
     return compute_cuda_->compare_results(active_params_);
+}
+
+auto ComputeConfig::add_modifiable_parameters(ParamListGL& param_list) -> void {
+    // Velocity Damping
+    param_list.add_param(std::make_unique<Param<float>>("Velocity Damping", active_params_.m_damping, 0.5f, 1.0f, .0001f, &active_params_.m_damping));
+    // Softening Factor
+    param_list.add_param(std::make_unique<Param<float>>("Softening Factor", active_params_.m_softening, 0.001f, 1.0f, .0001f, &active_params_.m_softening));
+    // Time step size
+    param_list.add_param(std::make_unique<Param<float>>("Time Step", active_params_.m_timestep, 0.0f, 1.0f, .0001f, &active_params_.m_timestep));
+    // Cluster scale (only affects starting configuration
+    param_list.add_param(std::make_unique<Param<float>>("Cluster Scale", active_params_.m_clusterScale, 0.0f, 10.0f, 0.01f, &active_params_.m_clusterScale));
+
+    // Velocity scale (only affects starting configuration)
+    param_list.add_param(std::make_unique<Param<float>>("Velocity Scale", active_params_.m_velocityScale, 0.0f, 1000.0f, 0.1f, &active_params_.m_velocityScale));
 }

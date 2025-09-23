@@ -1,7 +1,6 @@
 #pragma once
 
 #include "nbody_config.hpp"
-#include "params.hpp"
 
 #include <cuda_runtime.h>
 
@@ -10,6 +9,7 @@
 #include <span>
 #include <vector>
 
+struct NBodyParams;
 class Interface;
 template <std::floating_point T> class BodySystemCUDA;
 

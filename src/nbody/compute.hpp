@@ -12,6 +12,7 @@ class ComputeCPU;
 class ComputeCUDA;
 class Camera;
 class Interface;
+class ParamListGL;
 
 class ComputeConfig {
  public:
@@ -41,7 +42,7 @@ class ComputeConfig {
 
     auto paused() const noexcept { return paused_; }
 
-    auto create_sliders() -> ParamListGL { return active_params_.create_sliders(); }
+    auto add_modifiable_parameters(ParamListGL& param_list) -> void;
 
     auto run_benchmark(int nb_iterations) -> void;
 

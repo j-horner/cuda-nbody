@@ -5,6 +5,7 @@
 #include "gl_includes.hpp"
 #include "gl_print.hpp"
 #include "helper_cuda.hpp"
+#include "param.hpp"
 #include "paramgl.hpp"
 #include "render_particles.hpp"
 #include "win_coords.hpp"

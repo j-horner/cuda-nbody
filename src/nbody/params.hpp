@@ -1,7 +1,5 @@
 #pragma once
 
-#include "paramgl.hpp"
-
 #include <array>
 
 ////////////////////////////////////////
@@ -16,6 +14,4 @@ struct NBodyParams {
     std::array<float, 3> camera_origin;
 
     auto print() const -> void;
-
-    auto create_sliders() -> ParamListGL;
 };

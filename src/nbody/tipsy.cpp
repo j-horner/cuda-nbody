@@ -1,7 +1,5 @@
 #include "tipsy.hpp"
 
-#include <vector_types.h>
-
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -57,7 +55,7 @@ auto read_tipsy_file(const std::filesystem::path& fileName) -> std::array<std::v
 
     std::println("Trying to read file: {}", fileName.string());
 
-    std::ifstream inputFile(fileName, std::ios::in | std::ios::binary);
+    auto inputFile = std::ifstream(fileName, std::ios::in | std::ios::binary);
 
     if (!inputFile.is_open()) {
         throw std::runtime_error("Can't open input file");
@@ -65,19 +63,19 @@ auto read_tipsy_file(const std::filesystem::path& fileName) -> std::array<std::v
 
     auto read_data = [&](auto& data) { inputFile.read(reinterpret_cast<char*>(&data), sizeof(data)); };
 
-    Dump h;
+    auto h = Dump{};
     read_data(h);
 
-    int     idummy;
-    double4 positions;
-    double4 velocity;
+    int  idummy;
+    auto positions = std::array<double, 4>{};
+    auto velocity  = std::array<double, 4>{};
 
     // Read tipsy header
     auto NTotal = h.nbodies;
     auto NFirst = h.ndark;
 
-    DarkParticle d;
-    StarParticle s;
+    auto d = DarkParticle{};
+    auto s = StarParticle{};
 
     auto bodyPositions  = std::vector<double>{};
     auto bodyVelocities = std::vector<double>{};
@@ -85,29 +83,29 @@ auto read_tipsy_file(const std::filesystem::path& fileName) -> std::array<std::v
     for (int i = 0; i < NTotal; i++) {
         if (i < NFirst) {
             read_data(d);
-            velocity.w  = d.eps;
-            positions.w = d.mass;
-            positions.x = d.pos[0];
-            positions.y = d.pos[1];
-            positions.z = d.pos[2];
-            velocity.x  = d.vel[0];
-            velocity.y  = d.vel[1];
-            velocity.z  = d.vel[2];
-            idummy      = d.phi;
+            velocity[3]  = d.eps;
+            positions[3] = d.mass;
+            positions[0] = d.pos[0];
+            positions[1] = d.pos[1];
+            positions[2] = d.pos[2];
+            velocity[0]  = d.vel[0];
+            velocity[1]  = d.vel[1];
+            velocity[2]  = d.vel[2];
+            idummy       = d.phi;
         } else {
             read_data(s);
-            velocity.w  = s.eps;
-            positions.w = s.mass;
-            positions.x = s.pos[0];
-            positions.y = s.pos[1];
-            positions.z = s.pos[2];
-            velocity.x  = s.vel[0];
-            velocity.y  = s.vel[1];
-            velocity.z  = s.vel[2];
-            idummy      = s.phi;
+            velocity[3]  = s.eps;
+            positions[3] = s.mass;
+            positions[0] = s.pos[0];
+            positions[1] = s.pos[1];
+            positions[2] = s.pos[2];
+            velocity[0]  = s.vel[0];
+            velocity[1]  = s.vel[1];
+            velocity[2]  = s.vel[2];
+            idummy       = s.phi;
         }
-        bodyPositions.insert(bodyPositions.end(), {positions.x, positions.y, positions.z, positions.w});
-        bodyVelocities.insert(bodyVelocities.end(), {velocity.x, velocity.y, velocity.z, velocity.w});
+        bodyPositions.insert(bodyPositions.end(), {positions[0], positions[1], positions[2], positions[3]});
+        bodyVelocities.insert(bodyVelocities.end(), {velocity[0], velocity[1], velocity[2], velocity[3]});
     }
 
     // round up to a multiple of 256 bodies since our kernel only supports that...

@@ -4,9 +4,7 @@
 #include "compute.hpp"
 #include "controls.hpp"
 #include "gl_includes.hpp"
-#include "helper_cuda.hpp"
 #include "interface.hpp"
-#include "render_particles.hpp"
 
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #define NOMINMAX

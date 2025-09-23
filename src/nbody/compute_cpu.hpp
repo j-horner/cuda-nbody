@@ -1,7 +1,6 @@
 #pragma once
 
 #include "nbody_config.hpp"
-#include "params.hpp"
 
 #include <chrono>
 #include <concepts>
@@ -9,6 +8,7 @@
 #include <span>
 #include <vector>
 
+struct NBodyParams;
 class Interface;
 
 template <std::floating_point T> class BodySystemCPU;
@@ -45,6 +45,8 @@ class ComputeCPU {
     auto get_milliseconds_passed() -> float;
 
     auto display(Interface& interface) const -> void;
+
+    ~ComputeCPU() noexcept;
 
  private:
     template <std::floating_point TNew, std::floating_point TOld> auto switch_precision(BodySystemCPU<TNew>& new_nbody, const BodySystemCPU<TOld>& old_nbody) -> void;

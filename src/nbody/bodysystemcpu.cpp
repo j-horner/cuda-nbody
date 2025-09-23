@@ -31,7 +31,6 @@
 
 #include "params.hpp"
 #include "randomise_bodies.hpp"
-#include "tipsy.hpp"
 #include "vec.hpp"
 
 #ifdef OPENMP

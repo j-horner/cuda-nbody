@@ -32,8 +32,8 @@
 #include "compute_cuda.hpp"
 #include "gl_includes.hpp"
 #include "helper_cuda.hpp"
+#include "params.hpp"
 #include "randomise_bodies.hpp"
-#include "tipsy.hpp"
 #include "vec.hpp"
 
 #include <cuda_gl_interop.h>

@@ -226,7 +226,7 @@ auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
 ////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char** argv) {
+auto main(int argc, char** argv) -> int {
     try {
         // parse the command-line arguments
         const auto program_state = parse_args(argc, argv);
@@ -294,7 +294,11 @@ int main(int argc, char** argv) {
             return static_cast<int>(!result);
         }
 
-        auto interface = Interface{show_sliders, compute.create_sliders(), full_screen, ParticleRenderer(compute.nb_bodies())};
+        auto sliders = ParamListGL{};
+
+        compute.add_modifiable_parameters(sliders);
+
+        auto interface = Interface{show_sliders, std::move(sliders), full_screen, ParticleRenderer(compute.nb_bodies())};
 
         auto camera = Camera{};
 

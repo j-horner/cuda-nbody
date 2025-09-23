@@ -28,6 +28,7 @@
 #include "helper_cuda.hpp"
 #include "vec.hpp"
 
+// needed before <cuda_gl_interop.h> apparently...
 #include <GL/freeglut.h>
 
 // CUDA standard includes

@@ -151,3 +151,5 @@ auto ComputeCPU::display(Interface& interface) const -> void {
         interface.display_nbody_system(nbody_fp32_->get_position());
     }
 }
+
+ComputeCPU::~ComputeCPU() noexcept = default;

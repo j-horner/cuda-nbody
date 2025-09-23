@@ -5,7 +5,6 @@
 
 #include <span>
 
-class ParamListGL;
 class Camera;
 class ComputeConfig;
 

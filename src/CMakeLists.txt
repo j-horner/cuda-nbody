@@ -30,6 +30,5 @@ target_link_libraries(${PROJECT_NAME}_exe
                             ${PROJECT_NAME}_interface
                             ${PROJECT_NAME}_controls
                             ${PROJECT_NAME}_graphics_loop
-                            ${PROJECT_NAME}_params
                             ${PROJECT_NAME}_render_particles)
 
