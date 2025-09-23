@@ -36,15 +36,15 @@
 #include <span>
 #include <vector>
 
-struct ComputeConfig;
+class ComputeCUDA;
 struct NBodyParams;
 
 template <typename T> struct DeviceData {
-    T*           dPos[2];    // mapped host pointers
-    T*           dVel;
+    T*           pos[2];    // mapped host pointers
+    T*           vel;
     cudaEvent_t  event;
     unsigned int offset;
-    unsigned int numBodies;
+    unsigned int nb_bodies;
 };
 
 // CUDA BodySystem: runs on the GPU
@@ -53,9 +53,8 @@ template <std::floating_point T> class BodySystemCUDA {
     using Type                    = T;
     constexpr static auto use_cpu = false;
 
-    BodySystemCUDA(const ComputeConfig& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId);
-    BodySystemCUDA(const ComputeConfig& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, std::vector<T> positions, std::vector<T> velocities);
-    ~BodySystemCUDA() noexcept;
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
@@ -69,7 +68,9 @@ template <std::floating_point T> class BodySystemCUDA {
     auto set_position(std::span<const T> data) -> void;
     auto set_velocity(std::span<const T> data) -> void;
 
-    auto getCurrentReadBuffer() const noexcept { return m_pbo[m_currentRead]; }
+    auto getCurrentReadBuffer() const noexcept { return pbo_[current_read_]; }
+
+    ~BodySystemCUDA() noexcept;
 
  private:    // methods
     auto setSoftening(T softening) -> void;
@@ -77,33 +78,33 @@ template <std::floating_point T> class BodySystemCUDA {
     auto _initialize(int numBodies) -> void;
     auto _finalize() noexcept -> void;
 
-    unsigned int m_numBodies;
-    unsigned int m_numDevices;
-    bool         m_bInitialized = false;
-    int          m_devID;
+    unsigned int nb_bodies;
+    unsigned int nb_devices;
+    bool         initialised_ = false;
+    int          dev_id_;
 
     // Host data
-    std::array<T*, 2> m_hPos{nullptr, nullptr};
-    T*                m_hVel = nullptr;
+    std::array<T*, 2> host_pos_{nullptr, nullptr};
+    T*                host_vel_ = nullptr;
 
-    std::vector<DeviceData<T>> m_deviceData;
+    std::vector<DeviceData<T>> device_data_;
 
-    std::vector<T> m_hPos_vec = std::vector(m_numBodies * 4, T{0});
-    std::vector<T> m_hVel_vec = std::vector(m_numBodies * 4, T{0});
+    std::vector<T> host_pos_vec_ = std::vector(nb_bodies * 4, T{0});
+    std::vector<T> host_vel_vec_ = std::vector(nb_bodies * 4, T{0});
 
-    bool         m_bUsePBO;
-    bool         m_bUseSysMem;
-    bool         m_bUseP2P;
-    unsigned int m_SMVersion;
+    bool         use_pbo_;
+    bool         use_sys_mem_;
+    bool         use_p2p_;
+    unsigned int sm_version_;
 
     T m_damping = 0.995f;
 
-    unsigned int          m_pbo[2];
-    cudaGraphicsResource* m_pGRes[2];
-    unsigned int          m_currentRead  = 0u;
-    unsigned int          m_currentWrite = 1u;
+    unsigned int          pbo_[2];
+    cudaGraphicsResource* graphics_resource_[2];
+    unsigned int          current_read_  = 0u;
+    unsigned int          current_write_ = 1u;
 
-    unsigned int m_blockSize;
+    unsigned int block_size_;
 };
 
 extern template BodySystemCUDA<float>;

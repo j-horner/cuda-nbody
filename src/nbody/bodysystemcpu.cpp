@@ -29,10 +29,8 @@
 
 #include "bodysystemcpu.hpp"
 
-#include "compute.hpp"
-#include "helper_cuda.hpp"
+#include "params.hpp"
 #include "randomise_bodies.hpp"
-#include "tipsy.hpp"
 #include "vec.hpp"
 
 #ifdef OPENMP
@@ -50,37 +48,37 @@
 
 using std::ranges::copy;
 
-template <std::floating_point T> BodySystemCPU<T>::BodySystemCPU(int nb_bodies, const NBodyParams& params) : m_numBodies(nb_bodies), m_pos(m_numBodies * 4, T{0}), m_vel(m_numBodies * 4, T{0}), m_damping(params.m_damping) {
-    setSoftening(params.m_softening);
+template <std::floating_point T> BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params) : nb_bodies_(nb_bodies), pos_(nb_bodies_ * 4, T{0}), vel_(nb_bodies_ * 4, T{0}), damping_(params.damping) {
+    setSoftening(params.softening);
 
     reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
 template <std::floating_point T>
-BodySystemCPU<T>::BodySystemCPU(int nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : m_numBodies(nb_bodies), m_pos(std::move(positions)), m_vel(std::move(velocities)), m_damping(params.m_damping) {
-    assert(m_pos.size() == m_numBodies * 4);
-    assert(m_vel.size() == m_pos.size());
+BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : nb_bodies_(nb_bodies), pos_(std::move(positions)), vel_(std::move(velocities)), damping_(params.damping) {
+    assert(pos_.size() == nb_bodies_ * 4);
+    assert(vel_.size() == pos_.size());
 
-    setSoftening(params.m_softening);
+    setSoftening(params.softening);
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::reset(const NBodyParams& params, NBodyConfig config) -> void {
-    randomise_bodies<T>(config, m_pos, m_vel, params.m_clusterScale, params.m_velocityScale);
+    randomise_bodies<T>(config, pos_, vel_, params.cluster_scale, params.velocity_scale);
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::update_params(const NBodyParams& active_params) noexcept -> void {
-    setSoftening(active_params.m_softening);
-    m_damping = active_params.m_damping;
+    setSoftening(active_params.softening);
+    damping_ = active_params.damping;
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::set_position(std::span<const T> data) noexcept -> void {
-    assert(data.size() == m_pos.size());
-    copy(data, m_pos.begin());
+    assert(data.size() == pos_.size());
+    copy(data, pos_.begin());
 }
 template <std::floating_point T> auto BodySystemCPU<T>::set_velocity(std::span<const T> data) noexcept -> void {
-    assert(data.size() == m_vel.size());
-    copy(data, m_vel.begin());
+    assert(data.size() == vel_.size());
+    copy(data, vel_.begin());
 }
 
 template <std::floating_point T> auto bodyBodyInteraction(T accel[3], const T posMass0[4], const T posMass1[4], T softeningSquared) noexcept -> void {
@@ -113,7 +111,7 @@ template <std::floating_point T> auto BodySystemCPU<T>::_computeNBodyGravitation
 #pragma omp parallel for
 #endif
 
-    for (int i = 0; i < m_numBodies; i++) {
+    for (int i = 0; i < nb_bodies_; i++) {
         int indexForce = 3 * i;
 
         T acc[3] = {0, 0, 0};
@@ -121,20 +119,20 @@ template <std::floating_point T> auto BodySystemCPU<T>::_computeNBodyGravitation
         // We unroll this loop 4X for a small performance boost.
         int j = 0;
 
-        while (j < m_numBodies) {
-            bodyBodyInteraction<T>(acc, &m_pos[4 * i], &m_pos[4 * j], m_softeningSquared);
+        while (j < nb_bodies_) {
+            bodyBodyInteraction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
             j++;
-            bodyBodyInteraction<T>(acc, &m_pos[4 * i], &m_pos[4 * j], m_softeningSquared);
+            bodyBodyInteraction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
             j++;
-            bodyBodyInteraction<T>(acc, &m_pos[4 * i], &m_pos[4 * j], m_softeningSquared);
+            bodyBodyInteraction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
             j++;
-            bodyBodyInteraction<T>(acc, &m_pos[4 * i], &m_pos[4 * j], m_softeningSquared);
+            bodyBodyInteraction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
             j++;
         }
 
-        m_force[indexForce]     = acc[0];
-        m_force[indexForce + 1] = acc[1];
-        m_force[indexForce + 2] = acc[2];
+        force_[indexForce]     = acc[0];
+        force_[indexForce + 1] = acc[1];
+        force_[indexForce + 2] = acc[2];
     }
 }
 
@@ -145,23 +143,23 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T deltaTime) noex
 #pragma omp parallel for
 #endif
 
-    for (int i = 0; i < m_numBodies; ++i) {
+    for (int i = 0; i < nb_bodies_; ++i) {
         int index      = 4 * i;
         int indexForce = 3 * i;
 
         T pos[3], vel[3], force[3];
-        pos[0]    = m_pos[index + 0];
-        pos[1]    = m_pos[index + 1];
-        pos[2]    = m_pos[index + 2];
-        T invMass = m_pos[index + 3];
+        pos[0]    = pos_[index + 0];
+        pos[1]    = pos_[index + 1];
+        pos[2]    = pos_[index + 2];
+        T invMass = pos_[index + 3];
 
-        vel[0] = m_vel[index + 0];
-        vel[1] = m_vel[index + 1];
-        vel[2] = m_vel[index + 2];
+        vel[0] = vel_[index + 0];
+        vel[1] = vel_[index + 1];
+        vel[2] = vel_[index + 2];
 
-        force[0] = m_force[indexForce + 0];
-        force[1] = m_force[indexForce + 1];
-        force[2] = m_force[indexForce + 2];
+        force[0] = force_[indexForce + 0];
+        force[1] = force_[indexForce + 1];
+        force[2] = force_[indexForce + 2];
 
         // acceleration = force / mass;
         // new velocity = old velocity + acceleration * deltaTime
@@ -169,22 +167,22 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T deltaTime) noex
         vel[1] += (force[1] * invMass) * deltaTime;
         vel[2] += (force[2] * invMass) * deltaTime;
 
-        vel[0] *= m_damping;
-        vel[1] *= m_damping;
-        vel[2] *= m_damping;
+        vel[0] *= damping_;
+        vel[1] *= damping_;
+        vel[2] *= damping_;
 
         // new position = old position + velocity * deltaTime
         pos[0] += vel[0] * deltaTime;
         pos[1] += vel[1] * deltaTime;
         pos[2] += vel[2] * deltaTime;
 
-        m_pos[index + 0] = pos[0];
-        m_pos[index + 1] = pos[1];
-        m_pos[index + 2] = pos[2];
+        pos_[index + 0] = pos[0];
+        pos_[index + 1] = pos[1];
+        pos_[index + 2] = pos[2];
 
-        m_vel[index + 0] = vel[0];
-        m_vel[index + 1] = vel[1];
-        m_vel[index + 2] = vel[2];
+        vel_[index + 0] = vel[0];
+        vel_[index + 1] = vel[1];
+        vel_[index + 2] = vel[2];
     }
 }
 

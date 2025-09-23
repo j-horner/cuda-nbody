@@ -5,6 +5,7 @@
 #include "gl_includes.hpp"
 #include "gl_print.hpp"
 #include "helper_cuda.hpp"
+#include "param.hpp"
 #include "paramgl.hpp"
 #include "render_particles.hpp"
 #include "win_coords.hpp"
@@ -12,8 +13,14 @@
 #include <GL/freeglut.h>
 
 #include <format>
+#include <memory>
 
-auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer& renderer) -> void {
+Interface::Interface(bool display_sliders, ParamListGL parameters, bool enable_fullscreen, ParticleRenderer renderer) noexcept
+    : show_sliders_(display_sliders), param_list_(std::move(parameters)), full_screen_(enable_fullscreen), renderer_(std::move(renderer)) {
+    param_list_.add_param(std::make_unique<Param<float>>("Point Size", point_size_, 0.001f, 10.0f, 0.01f, &point_size_));
+}
+
+auto Interface::display(ComputeConfig& compute, Camera& camera) -> void {
     compute.update_simulation(camera);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -21,17 +28,17 @@ auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer
     if (display_enabled) {
         camera.view_transform();
 
-        compute.display_NBody_system(display_mode, renderer);
+        compute.display_NBody_system(*this);
 
         // display user interface
         if (show_sliders_) {
             glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);    // invert color
             glEnable(GL_BLEND);
-            param_list.render();
+            param_list_.render();
             glDisable(GL_BLEND);
         }
 
-        if (full_screen) {
+        if (full_screen_) {
             auto dev_id = -1;
 
             checkCudaErrors(cudaGetDevice(&dev_id));
@@ -41,7 +48,7 @@ auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer
 
             const auto win_coords = WinCoords{};
 
-            const auto msg1 = display_interactions ? std::format("{:.2f} billion interactions per second", compute.interactions_per_second()) : std::format("{:.2f} GFLOP/s", compute.gflops());
+            const auto msg1 = display_interactions_ ? std::format("{:.2f} billion interactions per second", compute.interactions_per_second()) : std::format("{:.2f} GFLOP/s", compute.gflops());
 
             const auto msg2 = std::format("{:.2f} FPS [{} | {} bodies]", compute.fps(), compute.fp64_enabled() ? "double precision" : "single precision", compute.nb_bodies());
 
@@ -59,11 +66,11 @@ auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer
         glutSwapBuffers();
     }
 
-    ++frame_count;
+    ++frame_count_;
 
     // this displays the frame rate updated every second (independent of frame rate)
-    if (frame_count >= fps_limit) {
-        compute.calculate_fps(frame_count);
+    if (frame_count_ >= fps_limit_) {
+        compute.calculate_fps(frame_count_);
 
         const auto fps_str = std::format(
             "CUDA N-Body ({} bodies): {:.1f} fps | {:.1f} BIPS | {:.1f} GFLOP/s | {}",
@@ -74,15 +81,15 @@ auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer
             compute.fp64_enabled() ? "double precision" : "single precision");
 
         glutSetWindowTitle(fps_str.c_str());
-        frame_count = 0;
+        frame_count_ = 0;
 
         if (compute.paused()) {
-            fps_limit = 0;
+            fps_limit_ = 0;
         } else if (compute.fps() > 1.f) {
             // setting the refresh limit (in number of frames) to be the FPS value obviously refreshes this message every second...
-            fps_limit = static_cast<int>(compute.fps());
+            fps_limit_ = static_cast<int>(compute.fps());
         } else {
-            fps_limit = 1;
+            fps_limit_ = 1;
         }
     }
 
@@ -90,6 +97,20 @@ auto Interface::display(ComputeConfig& compute, Camera& camera, ParticleRenderer
 }
 
 auto Interface::special(int key, int x, int y) -> void {
-    param_list.special(key, x, y);
+    param_list_.special(key, x, y);
     glutPostRedisplay();
+}
+
+auto Interface::display_nbody_system(std::span<const float> positions) -> void {
+    renderer_.display(display_mode_, point_size_, positions);
+}
+auto Interface::display_nbody_system(std::span<const double> positions) -> void {
+    renderer_.display(display_mode_, point_size_, positions);
+}
+
+auto Interface::display_nbody_system_fp32(unsigned int pbo) -> void {
+    renderer_.display<float>(display_mode_, point_size_, pbo);
+}
+auto Interface::display_nbody_system_fp64(unsigned int pbo) -> void {
+    renderer_.display<double>(display_mode_, point_size_, pbo);
 }

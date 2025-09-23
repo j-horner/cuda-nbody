@@ -30,10 +30,6 @@
 #define HELPERGL_EXTERN_GL_FUNC_IMPLEMENTATION
 
 #include "gl_includes.hpp"
-#include "helper_cuda.hpp"
-
-#include <cuda_gl_interop.h>
-#include <cuda_runtime.h>
 
 #include <print>
 #include <source_location>

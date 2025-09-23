@@ -4,9 +4,7 @@
 #include "compute.hpp"
 #include "controls.hpp"
 #include "gl_includes.hpp"
-#include "helper_cuda.hpp"
 #include "interface.hpp"
-#include "render_particles.hpp"
 
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #define NOMINMAX
@@ -60,8 +58,8 @@ template <auto GLUTFunction, typename F> auto register_callback(F& func) -> void
     RegisterCallback<GLUTFunction, Args>::register_callback(func);
 }
 
-auto execute_graphics_loop(ComputeConfig& compute, Interface& interface, Camera& camera, Controls& controls, ParticleRenderer& renderer) -> void {
-    auto display_ = [&]() { interface.display(compute, camera, renderer); };
+auto execute_graphics_loop(ComputeConfig& compute, Interface& interface, Camera& camera, Controls& controls) -> void {
+    auto display_ = [&]() { interface.display(compute, camera); };
 
     auto reshape_ = [](int w, int h) {
         glMatrixMode(GL_PROJECTION);
