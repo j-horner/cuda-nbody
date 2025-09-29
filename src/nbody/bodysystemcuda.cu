@@ -232,7 +232,19 @@ void integrateNbodySystem(
         }
 
         // check if kernel invocation generated an error
-        getLastCudaError("Kernel execution failed");
+        const auto err = cudaGetLastError();
+
+        if (cudaSuccess != err) {
+            fprintf(stderr,
+                    "%s(%i) : getLastCudaError() CUDA error :"
+                    " %s : (%d) %s.\n",
+                    __FILE__,
+                    __LINE__,
+                    "Kernel execution failed",
+                    static_cast<int>(err),
+                    cudaGetErrorString(err));
+            exit(EXIT_FAILURE);
+        }
     }
 
     if (numDevices > 1) {
