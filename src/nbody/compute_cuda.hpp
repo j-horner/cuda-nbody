@@ -2,7 +2,7 @@
 
 #include "nbody_config.hpp"
 
-#include <cuda_runtime.h>
+#include <cuda/api/event.hpp>
 
 #include <concepts>
 #include <memory>
@@ -13,15 +13,19 @@ struct NBodyParams;
 class Interface;
 template <std::floating_point T> class BodySystemCUDA;
 
+namespace cuda {
+class device_t;
+}    // namespace cuda
+
 class ComputeCUDA {
  public:
-    ComputeCUDA(std::size_t nb_requested_devices, bool enable_host_mem, bool use_pbo, int device, std::size_t block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
+    ComputeCUDA(int nb_requested_devices, bool enable_host_mem, bool use_pbo, int device, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
 
-    ComputeCUDA(std::size_t         nb_requested_devices,
+    ComputeCUDA(int                 nb_requested_devices,
                 bool                enable_host_mem,
                 bool                use_pbo,
                 int                 device,
-                std::size_t         block_size,
+                int                 block_size,
                 double              fp64_enabled,
                 std::size_t         num_bodies,
                 const NBodyParams&  params,
@@ -59,6 +63,19 @@ class ComputeCUDA {
     ~ComputeCUDA() noexcept;
 
  private:
+    ComputeCUDA(int                  nb_requested_devices,
+                bool                 enable_host_mem,
+                bool                 use_pbo,
+                const cuda::device_t main_device,
+                int                  block_size,
+                double               fp64_enabled,
+                std::size_t          num_bodies,
+                const NBodyParams&   params,
+                std::vector<float>   positions_fp32,
+                std::vector<float>   velocities_fp32,
+                std::vector<double>  positions_fp64,
+                std::vector<double>  velocities_fp64);
+
     template <std::floating_point TNew, std::floating_point TOld> auto switch_precision(BodySystemCUDA<TNew>& new_nbody, const BodySystemCUDA<TOld>& old_nbody) -> void;
 
     template <std::floating_point T> auto run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> float;
@@ -77,7 +94,7 @@ class ComputeCUDA {
     std::unique_ptr<BodySystemCUDA<float>>  nbody_fp32_;
     std::unique_ptr<BodySystemCUDA<double>> nbody_fp64_;
 
-    cudaEvent_t host_mem_sync_event_{};
-    cudaEvent_t start_event_{};
-    cudaEvent_t stop_event_{};
+    cuda::event_t host_mem_sync_event_;
+    cuda::event_t start_event_;
+    cuda::event_t stop_event_;
 };

@@ -119,6 +119,8 @@ find_package(GLUT REQUIRED)
 
 find_package(GLEW REQUIRED)
 
+find_package(cuda-api-wrappers CONFIG REQUIRED)
+
 # ===================================================================
 #
 #   Main code to build

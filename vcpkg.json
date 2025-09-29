@@ -10,7 +10,8 @@
         "cli11",
         "opengl",
         "freeglut",
-        "glew"
+        "glew",
+        "cuda-api-wrappers"
     ],
     "$default-features-explanation": "Users using this library transitively will not include tests.",
     "default-features": [],

@@ -159,13 +159,13 @@ struct Options {
     bool                  benchmark  = false;
     std::size_t           numbodies  = 0;
     int                   device     = -1;
-    std::size_t           numdevices = 0;
+    int                   numdevices = 0;
     bool                  compare    = false;
     bool                  qatest     = false;
     bool                  cpu        = false;
     std::filesystem::path tipsy;
-    std::size_t           i          = 0;
-    std::size_t           block_size = 0;
+    std::size_t           iterations = 0;
+    int                   block_size = 0;
 };
 
 auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
@@ -186,7 +186,7 @@ auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
     app.add_flag("--qatest", options.qatest, "Runs a QA test");
     app.add_flag("--cpu", options.cpu, "Run n-body simulation on the CPU");
     app.add_option("--tipsy", options.tipsy, "Load a tipsy model file for simulation")->check(CLI::ExistingFile);
-    app.add_option("-i,--iterations", options.i, "Number of iterations to run in the benchmark")->default_val(10);
+    app.add_option("-i,--iterations", options.iterations, "Number of iterations to run in the benchmark")->default_val(10);
     app.add_option("--blockSize", options.block_size, "The CUDA kernel block size")->default_val(256);
 
     // cppcheck-suppress unmatchedSuppression
@@ -283,7 +283,7 @@ auto main(int argc, char** argv) -> int {
             tipsy_file);
 
         if (cmd_options.benchmark) {
-            const auto nb_iterations = cmd_options.i == 0 ? 10 : static_cast<int>(cmd_options.i);
+            const auto nb_iterations = cmd_options.iterations == 0 ? 10 : static_cast<int>(cmd_options.iterations);
             compute.run_benchmark(nb_iterations);
             return 0;
         }

@@ -23,8 +23,8 @@ class ComputeConfig {
                   bool                         enable_benchmark,
                   bool                         enable_host_memory,
                   int                          device,
-                  std::size_t                  nb_requested_devices,
-                  std::size_t                  block_size,
+                  int                          nb_requested_devices,
+                  int                          block_size,
                   std::size_t                  nb_bodies,
                   const std::filesystem::path& tipsy_file);
 

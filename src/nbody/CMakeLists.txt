@@ -22,9 +22,11 @@ add_library(${PROJECT_NAME}_controls STATIC controls.cpp)
 
 add_library(${PROJECT_NAME}_graphics_loop STATIC graphics_loop.cpp)
 
-target_link_libraries(${PROJECT_NAME}_render_particles PRIVATE OpenGL::GL GLEW::GLEW)
-
+target_link_libraries(${PROJECT_NAME}_camera PRIVATE GLEW::GLEW OpenGL::GL)
 target_link_libraries(${PROJECT_NAME}_win_coords PRIVATE GLUT::GLUT)
+target_link_libraries(${PROJECT_NAME}_render_particles PRIVATE OpenGL::GL GLEW::GLEW)
+target_link_libraries(${PROJECT_NAME}_randomise_bodies PRIVATE CUDA::cudart_static)
+
 target_link_libraries(${PROJECT_NAME}_paramgl
                         PUBLIC
                             ${PROJECT_NAME}_param
@@ -33,7 +35,6 @@ target_link_libraries(${PROJECT_NAME}_paramgl
                             OpenGL::GL GLEW::GLEW
                             ${PROJECT_NAME}_win_coords)
 
-target_link_libraries(${PROJECT_NAME}_randomise_bodies PRIVATE CUDA::cudart_static)
 target_link_libraries(${PROJECT_NAME}_bodysystemcpu
                         PRIVATE
                             CUDA::cudart_static
@@ -48,7 +49,6 @@ target_link_libraries(${PROJECT_NAME}_bodysystemcuda
                             ${PROJECT_NAME}_randomise_bodies
                             GLUT::GLUT)
 
-target_link_libraries(${PROJECT_NAME}_camera PRIVATE GLEW::GLEW OpenGL::GL)
 target_link_libraries(${PROJECT_NAME}_compute
                         PUBLIC
                             ${PROJECT_NAME}_params
@@ -62,6 +62,7 @@ target_link_libraries(${PROJECT_NAME}_compute
 
 target_link_libraries(${PROJECT_NAME}_compute_cuda
                         PUBLIC
+                            cuda-api-wrappers::rtc cuda-api-wrappers::nvtx cuda-api-wrappers::runtime-and-driver cuda-api-wrappers::fatbin
                             CUDA::cudart_static
                         PRIVATE
                             ${PROJECT_NAME}_interface
@@ -85,7 +86,7 @@ target_link_libraries(${PROJECT_NAME}_interface
                             ${PROJECT_NAME}_paramgl
                             ${PROJECT_NAME}_render_particles
                         PRIVATE
-                            CUDA::cudart_static
+                            cuda-api-wrappers::rtc cuda-api-wrappers::nvtx cuda-api-wrappers::runtime-and-driver cuda-api-wrappers::fatbin
                             GLEW::GLEW
                             OpenGL::GL
                             GLUT::GLUT
