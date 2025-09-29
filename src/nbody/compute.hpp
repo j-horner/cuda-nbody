@@ -71,13 +71,17 @@ class ComputeConfig {
     ~ComputeConfig() noexcept;
 
  private:
+    using Clock        = std::chrono::steady_clock;
+    using TimePoint    = std::chrono::time_point<Clock>;
+    using Milliseconds = std::chrono::duration<float, std::milli>;
+
     auto print_benchmark_results(int nb_iterations, float milliseconds) -> void;
 
     auto select_demo(Camera& camera) -> void;
 
     constexpr auto compute_perf_stats(float frequency) -> void;
 
-    auto get_milliseconds_passed() -> float;
+    auto get_milliseconds_passed() -> Milliseconds;
 
     constexpr static auto demo_params = std::array{
         NBodyParams{0.016f, 1.54f, 8.0f, 0.1f, 1.0f, 0, -2, -100},
@@ -114,9 +118,6 @@ class ComputeConfig {
 
     TipsyData<float>  tipsy_data_fp32_;
     TipsyData<double> tipsy_data_fp64_;
-
-    using Clock     = std::chrono::steady_clock;
-    using TimePoint = std::chrono::time_point<Clock>;
 
     TimePoint demo_reset_time_;
 };

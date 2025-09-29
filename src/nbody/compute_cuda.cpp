@@ -286,7 +286,7 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCUDA::
     cudaDeviceSynchronize();
 }
 
-template <std::floating_point T> auto ComputeCUDA::run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> float {
+template <std::floating_point T> auto ComputeCUDA::run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> Milliseconds {
     // once without timing to prime the device
 
     nbody.update(dt);
@@ -300,7 +300,7 @@ template <std::floating_point T> auto ComputeCUDA::run_benchmark(int nb_iteratio
     return get_milliseconds_passed();
 }
 
-auto ComputeCUDA::run_benchmark(int nb_iterations, float dt) -> float {
+auto ComputeCUDA::run_benchmark(int nb_iterations, float dt) -> Milliseconds {
     if (fp64_enabled_) {
         return run_benchmark(nb_iterations, dt, *nbody_fp64_);
     } else {
@@ -366,11 +366,11 @@ auto ComputeCUDA::update_params(const NBodyParams& params) -> void {
     }
 }
 
-auto ComputeCUDA::get_milliseconds_passed() -> float {
+auto ComputeCUDA::get_milliseconds_passed() -> Milliseconds {
     stop_event_.record();
     stop_event_.synchronize();
 
-    const auto milliseconds = cuda::event::time_elapsed_between(start_event_, stop_event_).count();
+    const auto milliseconds = cuda::event::time_elapsed_between(start_event_, stop_event_);
 
     start_event_.record();
 

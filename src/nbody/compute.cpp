@@ -252,7 +252,7 @@ auto ComputeConfig::update_params() -> void {
     }
 }
 
-auto ComputeConfig::get_milliseconds_passed() -> float {
+auto ComputeConfig::get_milliseconds_passed() -> Milliseconds {
     // stop timer
     if (use_cpu_) {
         return compute_cpu_->get_milliseconds_passed();
@@ -261,7 +261,7 @@ auto ComputeConfig::get_milliseconds_passed() -> float {
 }
 
 auto ComputeConfig::calculate_fps(int frame_count) -> void {
-    const auto milliseconds_passed = get_milliseconds_passed();
+    const auto milliseconds_passed = get_milliseconds_passed().count();
 
     const auto frequency = (1000.f / milliseconds_passed);
     fps_                 = static_cast<float>(frame_count) * frequency;
@@ -272,7 +272,7 @@ auto ComputeConfig::calculate_fps(int frame_count) -> void {
 auto ComputeConfig::run_benchmark(int nb_iterations) -> void {
     const auto milliseconds = use_cpu_ ? compute_cpu_->run_benchmark(nb_iterations, active_params_.time_step) : compute_cuda_->run_benchmark(nb_iterations, active_params_.time_step);
 
-    print_benchmark_results(nb_iterations, milliseconds);
+    print_benchmark_results(nb_iterations, milliseconds.count());
 }
 
 auto ComputeConfig::compare_results() -> bool {
