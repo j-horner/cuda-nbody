@@ -262,7 +262,7 @@ auto main(int argc, char** argv) -> int {
         show_sliders    = tipsy_file.empty();
 
         // Initialize GL and GLUT if necessary
-        // TODO: graphics stuf is curently setup inside ComputeConfig so this needs to be invoked first
+        // TODO: graphics stuf is currently setup inside ComputeConfig so this needs to be invoked first
         if ((!cmd_options.compare) && (!cmd_options.benchmark) && (!cmd_options.qatest)) {
             initGL(&argc, argv, full_screen);
         }
