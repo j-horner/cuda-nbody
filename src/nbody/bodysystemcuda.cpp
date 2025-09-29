@@ -62,10 +62,9 @@ cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params)
-    : nb_bodies(static_cast<unsigned int>(compute.nb_bodies())), nb_devices(numDevices), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), dev_id_(deviceId),
-      m_damping(params.damping) {
-    _initialize(nb_bodies);
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params)
+    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), dev_id_(deviceId), damping_(params.damping) {
+    _initialize(nb_devices);
 
     setSoftening(params.softening);
 
@@ -73,23 +72,18 @@ BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDe
 }
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : nb_bodies(static_cast<unsigned int>(compute.nb_bodies())), nb_devices(numDevices), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), dev_id_(deviceId),
-      host_pos_vec_(std::move(positions)), host_vel_vec_(std::move(velocities)), m_damping(params.damping) {
-    assert(host_pos_vec_.size() == nb_bodies);
-    assert(host_vel_vec_.size() == nb_bodies);
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), dev_id_(deviceId),
+      host_pos_vec_(std::move(positions)), host_vel_vec_(std::move(velocities)), damping_(params.damping) {
+    assert(host_pos_vec_.size() == nb_bodies_);
+    assert(host_vel_vec_.size() == nb_bodies_);
 
-    _initialize(nb_bodies);
+    _initialize(nb_devices);
 
     setSoftening(params.softening);
 
     set_position(host_pos_vec_);
     set_velocity(host_vel_vec_);
-}
-
-template <std::floating_point T> BodySystemCUDA<T>::~BodySystemCUDA() noexcept {
-    _finalize();
-    nb_bodies = 0;
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams& params, NBodyConfig config) -> void {
@@ -98,62 +92,52 @@ template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams
     set_velocity(host_vel_vec_);
 }
 
-template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(int num_bodies) -> void {
-    assert(!initialised_);
-
-    nb_bodies = num_bodies;
-
-    unsigned int memSize = sizeof(T) * 4 * num_bodies;
+template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned int nb_devices) -> void {
+    unsigned int memSize = sizeof(T) * 4 * nb_bodies_;
 
     device_data_.resize(nb_devices);
 
     // divide up the workload amongst Devices
-    float* weights = new float[nb_devices];
-    int*   numSms  = new int[nb_devices];
-    float  total   = 0;
+    {
+        auto weights = std::vector<float>(nb_devices);
+        auto nb_sms  = std::vector<int>(nb_devices);
+        auto total   = 0.f;
 
-    for (unsigned int i = 0; i < nb_devices; i++) {
-        cudaDeviceProp props;
-        checkCudaErrors(cudaGetDeviceProperties(&props, i));
+        for (auto i = 0u; i < nb_devices; ++i) {
+            cudaDeviceProp props;
+            checkCudaErrors(cudaGetDeviceProperties(&props, i));
 
-        // Choose the weight based on the Compute Capability
-        // We estimate that a CC2.0 SM is about 4.0x faster than a CC 1.x SM for
-        // this application (since a 15-SM GF100 is about 2X faster than a 30-SM
-        // GT200).
-        numSms[i]  = props.multiProcessorCount;
-        weights[i] = numSms[i] * (props.major >= 2 ? 4.f : 1.f);
-        total += weights[i];
-    }
-
-    unsigned int offset    = 0;
-    unsigned int remaining = nb_bodies;
-
-    for (unsigned int i = 0; i < nb_devices; i++) {
-        unsigned int count = (int)((weights[i] / total) * nb_bodies);
-        // Rounding up to numSms[i]*256 leads to better GPU utilization _per_ GPU
-        // but when using multiple devices, it will lead to the last GPUs not having
-        // any work at all
-        // which means worse overall performance
-        // unsigned int round = numSms[i] * 256;
-        unsigned int round = 256;
-
-        count = round * ((count + round - 1) / round);
-        if (count > remaining) {
-            count = remaining;
+            // Choose the weight based on the Compute Capability
+            // We estimate that a CC2.0 SM is about 4.0x faster than a CC 1.x SM for this application (since a 15-SM GF100 is about 2X faster than a 30-SM GT200).
+            nb_sms[i]  = props.multiProcessorCount;
+            weights[i] = nb_sms[i] * (props.major >= 2 ? 4.f : 1.f);
+            total += weights[i];
         }
 
-        remaining -= count;
-        device_data_[i].offset    = offset;
-        device_data_[i].nb_bodies = count;
-        offset += count;
+        auto offset    = 0u;
+        auto remaining = nb_bodies_;
 
-        if ((i == nb_devices - 1) && (offset < nb_bodies - 1)) {
-            device_data_[i].nb_bodies += nb_bodies - offset;
+        for (auto i = 0u; i < nb_devices; ++i) {
+            auto count = static_cast<unsigned int>((weights[i] / total) * nb_bodies_);
+            // Rounding up to nb_sms[i]*256 leads to better GPU utilization _per_ GPU but when using multiple devices, it will lead to the last GPUs not having any work at all which means worse overall performance.
+            // unsigned int round = nb_sms[i] * 256;
+            constexpr auto round = 256u;
+
+            count = round * ((count + round - 1) / round);
+            if (count > remaining) {
+                count = remaining;
+            }
+
+            remaining -= count;
+            device_data_[i].offset    = offset;
+            device_data_[i].nb_bodies = count;
+            offset += count;
+        }
+
+        if (offset < nb_bodies_ - 1) {
+            device_data_.back().nb_bodies += nb_bodies_ - offset;
         }
     }
-
-    delete[] weights;
-    delete[] numSms;
 
     if (use_sys_mem_) {
         checkCudaErrors(cudaHostAlloc((void**)&host_pos_[0], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
@@ -175,8 +159,8 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(int num_bod
             checkCudaErrors(cudaHostGetDevicePointer((void**)&device_data_[i].vel, (void*)host_vel_, 0));
         }
     } else {
-        host_pos_[0] = new T[nb_bodies * 4];
-        host_vel_    = new T[nb_bodies * 4];
+        host_pos_[0] = new T[nb_bodies_ * 4];
+        host_vel_    = new T[nb_bodies_ * 4];
 
         memset(host_pos_[0], 0, memSize);
         memset(host_vel_, 0, memSize);
@@ -234,19 +218,15 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(int num_bod
             }
         }
     }
-
-    initialised_ = true;
 }
 
-template <std::floating_point T> auto BodySystemCUDA<T>::_finalize() noexcept -> void {
-    assert(initialised_);
-
+template <std::floating_point T> BodySystemCUDA<T>::~BodySystemCUDA() noexcept {
     if (use_sys_mem_) {
         checkCudaErrors(cudaFreeHost(host_pos_[0]));
         checkCudaErrors(cudaFreeHost(host_pos_[1]));
         checkCudaErrors(cudaFreeHost(host_vel_));
 
-        for (unsigned int i = 0; i < nb_devices; i++) {
+        for (unsigned int i = 0; i < device_data_.size(); i++) {
             cudaEventDestroy(device_data_[i].event);
         }
     } else {
@@ -267,21 +247,19 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_finalize() noexcept ->
             checkCudaErrors(cudaEventDestroy(device_data_[0].event));
 
             if (use_p2p_) {
-                for (unsigned int i = 1; i < nb_devices; i++) {
+                for (unsigned int i = 1; i < device_data_.size(); i++) {
                     checkCudaErrors(cudaEventDestroy(device_data_[i].event));
                 }
             }
         }
     }
-
-    initialised_ = false;
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::setSoftening(T softening) -> void {
     T softeningSq = softening * softening;
 
-    for (unsigned int i = 0; i < nb_devices; i++) {
-        if (nb_devices > 1) {
+    for (unsigned int i = 0; i < device_data_.size(); i++) {
+        if (device_data_.size() > 1) {
             checkCudaErrors(cudaSetDevice(i));
         }
 
@@ -290,21 +268,17 @@ template <std::floating_point T> auto BodySystemCUDA<T>::setSoftening(T softenin
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::update(T deltaTime) -> void {
-    assert(initialised_);
-
-    integrateNbodySystem<T>(device_data_, graphics_resource_, current_read_, (float)deltaTime, (float)m_damping, nb_bodies, nb_devices, block_size_, use_pbo_);
+    integrateNbodySystem<T>(device_data_, graphics_resource_, current_read_, (float)deltaTime, (float)damping_, nb_bodies_, static_cast<unsigned int>(device_data_.size()), block_size_, use_pbo_);
 
     std::swap(current_read_, current_write_);
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::update_params(const NBodyParams& active_params) -> void {
     setSoftening(active_params.softening);
-    m_damping = active_params.damping;
+    damping_ = active_params.damping;
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::get_position() const -> std::span<const T> {
-    assert(initialised_);
-
     T* hdata = 0;
     T* ddata = 0;
 
@@ -327,18 +301,16 @@ template <std::floating_point T> auto BodySystemCUDA<T>::get_position() const ->
             checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&ddata, &bytes, pgres));
         }
 
-        checkCudaErrors(cudaMemcpy(hdata, ddata, nb_bodies * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+        checkCudaErrors(cudaMemcpy(hdata, ddata, nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
 
         if (pgres) {
             checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
         }
     }
 
-    return {hdata, nb_bodies * 4};
+    return {hdata, nb_bodies_ * 4};
 }
 template <std::floating_point T> auto BodySystemCUDA<T>::get_velocity() const -> std::span<const T> {
-    assert(initialised_);
-
     T* hdata = 0;
     T* ddata = 0;
 
@@ -355,52 +327,48 @@ template <std::floating_point T> auto BodySystemCUDA<T>::get_velocity() const ->
             checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&ddata, &bytes, pgres));
         }
 
-        checkCudaErrors(cudaMemcpy(hdata, ddata, nb_bodies * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+        checkCudaErrors(cudaMemcpy(hdata, ddata, nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
 
         if (pgres) {
             checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
         }
     }
 
-    return {hdata, nb_bodies * 4};
+    return {hdata, nb_bodies_ * 4};
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::set_position(std::span<const T> data) -> void {
-    assert(initialised_);
-
     current_read_  = 0;
     current_write_ = 1;
 
     if (use_pbo_) {
         glBindBuffer(GL_ARRAY_BUFFER, pbo_[current_read_]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(T) * nb_bodies, data.data());
+        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(T) * nb_bodies_, data.data());
 
         int size = 0;
         glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&size);
 
-        if ((unsigned)size != 4 * (sizeof(T) * nb_bodies)) {
+        if ((unsigned)size != 4 * (sizeof(T) * nb_bodies_)) {
             fprintf(stderr, "WARNING: Pixel Buffer Object download failed!n");
         }
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
     } else {
         if (use_sys_mem_) {
-            memcpy(host_pos_[current_read_], data.data(), nb_bodies * 4 * sizeof(T));
+            memcpy(host_pos_[current_read_], data.data(), nb_bodies_ * 4 * sizeof(T));
         } else
-            checkCudaErrors(cudaMemcpy(device_data_[0].pos[current_read_], data.data(), nb_bodies * 4 * sizeof(T), cudaMemcpyHostToDevice));
+            checkCudaErrors(cudaMemcpy(device_data_[0].pos[current_read_], data.data(), nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
     }
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::set_velocity(std::span<const T> data) -> void {
-    assert(initialised_);
-
     current_read_  = 0;
     current_write_ = 1;
 
     if (use_sys_mem_) {
-        memcpy(host_vel_, data.data(), nb_bodies * 4 * sizeof(T));
+        memcpy(host_vel_, data.data(), nb_bodies_ * 4 * sizeof(T));
     } else {
-        checkCudaErrors(cudaMemcpy(device_data_[0].vel, data.data(), nb_bodies * 4 * sizeof(T), cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaMemcpy(device_data_[0].vel, data.data(), nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
     }
 }
 

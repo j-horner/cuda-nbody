@@ -53,8 +53,8 @@ template <std::floating_point T> class BodySystemCUDA {
     using Type                    = T;
     constexpr static auto use_cpu = false;
 
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params);
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int numDevices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
@@ -75,12 +75,9 @@ template <std::floating_point T> class BodySystemCUDA {
  private:    // methods
     auto setSoftening(T softening) -> void;
 
-    auto _initialize(int numBodies) -> void;
-    auto _finalize() noexcept -> void;
+    auto _initialize(unsigned int nb_devices) -> void;
 
-    unsigned int nb_bodies;
-    unsigned int nb_devices;
-    bool         initialised_ = false;
+    unsigned int nb_bodies_;
     int          dev_id_;
 
     // Host data
@@ -89,15 +86,15 @@ template <std::floating_point T> class BodySystemCUDA {
 
     std::vector<DeviceData<T>> device_data_;
 
-    std::vector<T> host_pos_vec_ = std::vector(nb_bodies * 4, T{0});
-    std::vector<T> host_vel_vec_ = std::vector(nb_bodies * 4, T{0});
+    std::vector<T> host_pos_vec_ = std::vector(nb_bodies_ * 4, T{0});
+    std::vector<T> host_vel_vec_ = std::vector(nb_bodies_ * 4, T{0});
 
     bool         use_pbo_;
     bool         use_sys_mem_;
     bool         use_p2p_;
     unsigned int sm_version_;
 
-    T m_damping = 0.995f;
+    T damping_ = 0.995f;
 
     unsigned int          pbo_[2];
     cudaGraphicsResource* graphics_resource_[2];
