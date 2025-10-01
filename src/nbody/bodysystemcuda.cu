@@ -25,6 +25,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "device_data.hpp"
 #include "helper_cuda.hpp"
 #include "vec.hpp"
 
@@ -89,13 +90,13 @@ template <> __device__ double getSofteningSquared<double>() {
     return softeningSquared_fp64;
 }
 
-template <typename T> struct DeviceData {
+/* template <typename T> struct DeviceData {
     T*           pos[2];    // mapped host pointers
     T*           vel;
     cudaEvent_t  event;
     unsigned int offset;
     unsigned int nb_bodies;
-};
+};*/
 
 template <typename T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
     vec3<T> r;
@@ -226,7 +227,8 @@ void integrateNbodySystem(
             numTiles);
 
         if (numDevices > 1) {
-            checkCudaErrors(cudaEventRecord(deviceData[dev].event));
+            // checkCudaErrors(cudaEventRecord(deviceData[dev].event));
+            deviceData[dev].record();
             // MJH: Hack on older driver versions to force kernel launches to flush!
             cudaStreamQuery(0);
         }
@@ -249,7 +251,8 @@ void integrateNbodySystem(
 
     if (numDevices > 1) {
         for (unsigned int dev = 0; dev < numDevices; dev++) {
-            checkCudaErrors(cudaEventSynchronize(deviceData[dev].event));
+            // checkCudaErrors(cudaEventSynchronize(deviceData[dev].event));
+            deviceData[dev].synchronise();
         }
     }
 

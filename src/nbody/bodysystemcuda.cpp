@@ -95,7 +95,9 @@ template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams
 template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned int nb_devices) -> void {
     unsigned int memSize = sizeof(T) * 4 * nb_bodies_;
 
-    device_data_.resize(nb_devices);
+    for (auto d = 0u; d < nb_devices; ++d) {
+        device_data_.emplace_back(cuda::device::get(d));
+    }
 
     // divide up the workload amongst Devices
     {
@@ -104,13 +106,12 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned in
         auto total   = 0.f;
 
         for (auto i = 0u; i < nb_devices; ++i) {
-            cudaDeviceProp props;
-            checkCudaErrors(cudaGetDeviceProperties(&props, i));
+            const auto device = cuda::device::get(i);
 
             // Choose the weight based on the Compute Capability
             // We estimate that a CC2.0 SM is about 4.0x faster than a CC 1.x SM for this application (since a 15-SM GF100 is about 2X faster than a 30-SM GT200).
-            nb_sms[i]  = props.multiProcessorCount;
-            weights[i] = nb_sms[i] * (props.major >= 2 ? 4.f : 1.f);
+            nb_sms[i]  = device.multiprocessor_count();
+            weights[i] = nb_sms[i] * (device.compute_capability().major() >= 2 ? 4.f : 1.f);
             total += weights[i];
         }
 
@@ -153,7 +154,6 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned in
                 checkCudaErrors(cudaSetDevice(i));
             }
 
-            checkCudaErrors(cudaEventCreate(&device_data_[i].event));
             checkCudaErrors(cudaHostGetDevicePointer((void**)&device_data_[i].pos[0], (void*)host_pos_[0], 0));
             checkCudaErrors(cudaHostGetDevicePointer((void**)&device_data_[i].pos[1], (void*)host_pos_[1], 0));
             checkCudaErrors(cudaHostGetDevicePointer((void**)&device_data_[i].vel, (void*)host_vel_, 0));
@@ -166,7 +166,6 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned in
         memset(host_vel_, 0, memSize);
 
         checkCudaErrors(cudaSetDevice(dev_id_));
-        checkCudaErrors(cudaEventCreate(&device_data_[0].event));
 
         if (use_pbo_) {
             // create the position pixel buffer objects for rendering
@@ -204,12 +203,9 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned in
                 if ((error = cudaDeviceEnablePeerAccess(0, 0)) != cudaErrorPeerAccessAlreadyEnabled) {
                     checkCudaErrors(error);
                 } else {
-                    // We might have already enabled P2P, so catch this and reset error
-                    // code...
+                    // We might have already enabled P2P, so catch this and reset error code...
                     cudaGetLastError();
                 }
-
-                checkCudaErrors(cudaEventCreate(&device_data_[i].event));
 
                 // Point all GPUs to the memory allocated on gpu0
                 device_data_[i].pos[0] = device_data_[0].pos[0];
@@ -226,9 +222,6 @@ template <std::floating_point T> BodySystemCUDA<T>::~BodySystemCUDA() noexcept {
         checkCudaErrors(cudaFreeHost(host_pos_[1]));
         checkCudaErrors(cudaFreeHost(host_vel_));
 
-        for (unsigned int i = 0; i < device_data_.size(); i++) {
-            cudaEventDestroy(device_data_[i].event);
-        }
     } else {
         delete[] host_pos_[0];
         delete[] host_pos_[1];
@@ -243,14 +236,6 @@ template <std::floating_point T> BodySystemCUDA<T>::~BodySystemCUDA() noexcept {
         } else {
             checkCudaErrors(cudaFree((void**)device_data_[0].pos[0]));
             checkCudaErrors(cudaFree((void**)device_data_[0].pos[1]));
-
-            checkCudaErrors(cudaEventDestroy(device_data_[0].event));
-
-            if (use_p2p_) {
-                for (unsigned int i = 1; i < device_data_.size(); i++) {
-                    checkCudaErrors(cudaEventDestroy(device_data_[i].event));
-                }
-            }
         }
     }
 }

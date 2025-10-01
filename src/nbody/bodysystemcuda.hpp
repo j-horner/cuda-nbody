@@ -27,8 +27,10 @@
 
 #pragma once
 
+#include "device_data.hpp"
 #include "nbody_config.hpp"
 
+#include <cuda/api.hpp>
 #include <cuda_runtime.h>
 
 #include <array>
@@ -38,14 +40,6 @@
 
 class ComputeCUDA;
 struct NBodyParams;
-
-template <typename T> struct DeviceData {
-    T*           pos[2];    // mapped host pointers
-    T*           vel;
-    cudaEvent_t  event;
-    unsigned int offset;
-    unsigned int nb_bodies;
-};
 
 // CUDA BodySystem: runs on the GPU
 template <std::floating_point T> class BodySystemCUDA {

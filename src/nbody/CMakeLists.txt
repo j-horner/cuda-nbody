@@ -10,7 +10,7 @@ add_library(${PROJECT_NAME}_param STATIC param.cpp)
 add_library(${PROJECT_NAME}_params STATIC params.cpp)
 
 add_library(${PROJECT_NAME}_randomise_bodies STATIC randomise_bodies.cpp)
-add_library(${PROJECT_NAME}_bodysystemcuda STATIC bodysystemcuda.cu bodysystemcuda.cpp)
+add_library(${PROJECT_NAME}_bodysystemcuda STATIC bodysystemcuda.cu bodysystemcuda.cpp device_data.cpp)
 add_library(${PROJECT_NAME}_bodysystemcpu STATIC bodysystemcpu.cpp)
 
 add_library(${PROJECT_NAME}_compute STATIC compute.cpp)
@@ -63,7 +63,6 @@ target_link_libraries(${PROJECT_NAME}_compute
 target_link_libraries(${PROJECT_NAME}_compute_cuda
                         PUBLIC
                             cuda-api-wrappers::rtc cuda-api-wrappers::nvtx cuda-api-wrappers::runtime-and-driver cuda-api-wrappers::fatbin
-                            CUDA::cudart_static
                         PRIVATE
                             ${PROJECT_NAME}_interface
                             ${PROJECT_NAME}_bodysystemcuda
