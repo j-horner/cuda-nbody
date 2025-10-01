@@ -189,13 +189,13 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
 
 template <typename T>
 void integrateNbodySystem(
-    std::span<DeviceData<T>> deviceData,
+    DeviceData<T>&           main_device_data,
+    std::span<DeviceData<T>> secondary_device_data,
     cudaGraphicsResource**   pgres,
     unsigned int             currentRead,
     float                    deltaTime,
     float                    damping,
     unsigned int             numBodies,
-    unsigned int             numDevices,
     int                      blockSize,
     bool                     bUsePBO) {
     if (bUsePBO) {
@@ -203,35 +203,44 @@ void integrateNbodySystem(
         checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[1 - currentRead], cudaGraphicsMapFlagsWriteDiscard));
         checkCudaErrors(cudaGraphicsMapResources(2, pgres, 0));
         size_t bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].pos[currentRead]), &bytes, pgres[currentRead]));
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].pos[1 - currentRead]), &bytes, pgres[1 - currentRead]));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(main_device_data.pos[currentRead]), &bytes, pgres[currentRead]));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(main_device_data.pos[1 - currentRead]), &bytes, pgres[1 - currentRead]));
     }
 
-    for (unsigned int dev = 0; dev != numDevices; dev++) {
-        if (numDevices > 1) {
-            cudaSetDevice(dev);
-        }
+    auto integrate = [&](DeviceData<T>& device) {
+        const auto numBlocks     = (device.nb_bodies + blockSize - 1) / blockSize;
+        const auto numTiles      = (numBodies + blockSize - 1) / blockSize;
+        const auto sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
 
-        int numBlocks     = (deviceData[dev].nb_bodies + blockSize - 1) / blockSize;
-        int numTiles      = (numBodies + blockSize - 1) / blockSize;
-        int sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
+        integrateBodies<T>
+            <<<numBlocks, blockSize, sharedMemSize>>>((vec4<T>*)device.pos[1 - currentRead], (vec4<T>*)device.pos[currentRead], (vec4<T>*)device.vel, device.offset, device.nb_bodies, deltaTime, damping, numTiles);
+    };
 
-        integrateBodies<T><<<numBlocks, blockSize, sharedMemSize>>>(
-            (vec4<T>*)deviceData[dev].pos[1 - currentRead],
-            (vec4<T>*)deviceData[dev].pos[currentRead],
-            (vec4<T>*)deviceData[dev].vel,
-            deviceData[dev].offset,
-            deviceData[dev].nb_bodies,
-            deltaTime,
-            damping,
-            numTiles);
+    integrate(main_device_data);
 
-        if (numDevices > 1) {
-            // checkCudaErrors(cudaEventRecord(deviceData[dev].event));
-            deviceData[dev].record();
-            // MJH: Hack on older driver versions to force kernel launches to flush!
-            cudaStreamQuery(0);
-        }
+    // check if kernel invocation generated an error
+    const auto err = cudaGetLastError();
+
+    if (cudaSuccess != err) {
+        fprintf(stderr,
+                "%s(%i) : getLastCudaError() CUDA error :"
+                " %s : (%d) %s.\n",
+                __FILE__,
+                __LINE__,
+                "Kernel execution failed",
+                static_cast<int>(err),
+                cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+
+    for (auto dev = 0u; dev < secondary_device_data.size(); ++dev) {
+        cudaSetDevice(dev + 1u);
+
+        integrate(secondary_device_data[dev]);
+
+        secondary_device_data[dev].record();
+        // MJH: Hack on older driver versions to force kernel launches to flush!
+        cudaStreamQuery(0);
 
         // check if kernel invocation generated an error
         const auto err = cudaGetLastError();
@@ -249,11 +258,8 @@ void integrateNbodySystem(
         }
     }
 
-    if (numDevices > 1) {
-        for (unsigned int dev = 0; dev < numDevices; dev++) {
-            // checkCudaErrors(cudaEventSynchronize(deviceData[dev].event));
-            deviceData[dev].synchronise();
-        }
+    for (auto& device : secondary_device_data) {
+        device.synchronise();
     }
 
     if (bUsePBO) {
@@ -262,8 +268,24 @@ void integrateNbodySystem(
 }
 
 // Explicit specializations needed to generate code
-template void integrateNbodySystem<
-    float>(std::span<DeviceData<float>> deviceData, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, unsigned int numDevices, int blockSize, bool bUsePBO);
+template void integrateNbodySystem<float>(
+    DeviceData<float>&           main_device_data,
+    std::span<DeviceData<float>> secondary_device_data,
+    cudaGraphicsResource**       pgres,
+    unsigned int                 currentRead,
+    float                        deltaTime,
+    float                        damping,
+    unsigned int                 numBodies,
+    int                          blockSize,
+    bool                         bUsePBO);
 
-template void integrateNbodySystem<
-    double>(std::span<DeviceData<double>> deviceData, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, unsigned int numDevices, int blockSize, bool bUsePBO);
+template void integrateNbodySystem<double>(
+    DeviceData<double>&           main_device_data,
+    std::span<DeviceData<double>> secondary_device_data,
+    cudaGraphicsResource**        pgres,
+    unsigned int                  currentRead,
+    float                         deltaTime,
+    float                         damping,
+    unsigned int                  numBodies,
+    int                           blockSize,
+    bool                          bUsePBO);
