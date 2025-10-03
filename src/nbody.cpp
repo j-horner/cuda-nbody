@@ -262,14 +262,14 @@ auto main(int argc, char** argv) -> int {
         show_sliders    = tipsy_file.empty();
 
         // Initialize GL and GLUT if necessary
-        // TODO: graphics stuf is currently setup inside ComputeConfig so this needs to be invoked first
+        // TODO: graphics stuf is currently setup inside Compute so this needs to be invoked first
         if ((!cmd_options.compare) && (!cmd_options.benchmark) && (!cmd_options.qatest)) {
             initGL(&argc, argv, full_screen);
         }
 
         const auto compare_to_cpu = (cmd_options.compare || cmd_options.qatest) && (!cmd_options.cpu);
 
-        auto compute = ComputeConfig(
+        auto compute = Compute(
             cmd_options.fp64,
             cycle_demo,
             cmd_options.cpu,

@@ -18,20 +18,19 @@ constexpr auto flops_per_interaction(bool fp64_enabled) {
 }
 }    // namespace
 
-ComputeConfig::~ComputeConfig() noexcept = default;
+Compute::~Compute() noexcept = default;
 
-ComputeConfig::ComputeConfig(
-    bool                         enable_fp64,
-    bool                         enable_cycle_demo,
-    bool                         enable_cpu,
-    bool                         enable_compare_to_cpu,
-    bool                         enable_benchmark,
-    bool                         enable_host_memory,
-    int                          device,
-    int                          nb_requested_devices,
-    int                          block_size,
-    std::size_t                  nb_bodies,
-    const std::filesystem::path& tipsy_file)
+Compute::Compute(bool                         enable_fp64,
+                 bool                         enable_cycle_demo,
+                 bool                         enable_cpu,
+                 bool                         enable_compare_to_cpu,
+                 bool                         enable_benchmark,
+                 bool                         enable_host_memory,
+                 int                          device,
+                 int                          nb_requested_devices,
+                 int                          block_size,
+                 std::size_t                  nb_bodies,
+                 const std::filesystem::path& tipsy_file)
     : fp64_enabled_(enable_fp64), cycle_demo_(enable_cycle_demo), use_cpu_(enable_cpu) {
     const auto use_pbo = !(enable_benchmark || enable_compare_to_cpu || enable_host_memory || enable_cpu);
     if (!tipsy_file.empty()) {
@@ -112,7 +111,7 @@ ComputeConfig::ComputeConfig(
     demo_reset_time_ = Clock::now();
 }
 
-auto ComputeConfig::print_benchmark_results(int nb_iterations, float milliseconds) -> void {
+auto Compute::print_benchmark_results(int nb_iterations, float milliseconds) -> void {
     compute_perf_stats(nb_iterations * (1000.0f / milliseconds));
 
     std::println("{} bodies, total time for {} iterations: {:3} ms", num_bodies_, nb_iterations, milliseconds);
@@ -121,7 +120,7 @@ auto ComputeConfig::print_benchmark_results(int nb_iterations, float millisecond
     std::println("= {:3} {}-precision GFLOP/s at {} flops per interaction", g_flops_, fp64_enabled_ ? "double" : "single", flops_per_interaction(fp64_enabled_));
 }
 
-constexpr auto ComputeConfig::compute_perf_stats(float frequency) -> void {
+constexpr auto Compute::compute_perf_stats(float frequency) -> void {
     // double precision uses intrinsic operation followed by refinement, resulting in higher operation count per interaction.
     // Note: Astrophysicists use 38 flops per interaction no matter what, based on "historical precedent", but they are using FLOP/s as a measure of "science throughput".
     // We are using it as a measure of hardware throughput.  They should really use interactions/s...
@@ -130,7 +129,7 @@ constexpr auto ComputeConfig::compute_perf_stats(float frequency) -> void {
     g_flops_ = interactions_per_second_ * static_cast<float>(flops_per_interaction(fp64_enabled_));
 }
 
-auto ComputeConfig::switch_precision() -> void {
+auto Compute::switch_precision() -> void {
     if (use_cpu_) {
         compute_cpu_->switch_precision();
     } else {
@@ -140,12 +139,12 @@ auto ComputeConfig::switch_precision() -> void {
     fp64_enabled_ = !fp64_enabled_;
 }
 
-auto ComputeConfig::toggle_cycle_demo() -> void {
+auto Compute::toggle_cycle_demo() -> void {
     cycle_demo_ = !cycle_demo_;
     std::println("Cycle Demo Parameters: {}\n", cycle_demo_ ? "ON" : "OFF");
 }
 
-auto ComputeConfig::previous_demo(Camera& camera) -> void {
+auto Compute::previous_demo(Camera& camera) -> void {
     if (active_demo_ == 0) {
         active_demo_ = nb_demos - 1;
     } else {
@@ -154,7 +153,7 @@ auto ComputeConfig::previous_demo(Camera& camera) -> void {
     select_demo(camera);
 }
 
-auto ComputeConfig::next_demo(Camera& camera) -> void {
+auto Compute::next_demo(Camera& camera) -> void {
     if (active_demo_ == (nb_demos - 1)) {
         active_demo_ = 0;
     } else {
@@ -163,7 +162,7 @@ auto ComputeConfig::next_demo(Camera& camera) -> void {
     select_demo(camera);
 }
 
-auto ComputeConfig::select_demo(Camera& camera) -> void {
+auto Compute::select_demo(Camera& camera) -> void {
     using enum NBodyConfig;
 
     assert(active_demo_ < nb_demos);
@@ -196,7 +195,7 @@ auto ComputeConfig::select_demo(Camera& camera) -> void {
     demo_reset_time_ = Clock::now();
 }
 
-auto ComputeConfig::update_simulation(Camera& camera) -> void {
+auto Compute::update_simulation(Camera& camera) -> void {
     if (!paused_) {
         const auto current_demo_time = Clock::now() - demo_reset_time_;
 
@@ -212,7 +211,7 @@ auto ComputeConfig::update_simulation(Camera& camera) -> void {
     }
 }
 
-auto ComputeConfig::display_NBody_system(Interface& interface) -> void {
+auto Compute::display_NBody_system(Interface& interface) -> void {
     if (use_cpu_) {
         compute_cpu_->display(interface);
     } else {
@@ -220,7 +219,7 @@ auto ComputeConfig::display_NBody_system(Interface& interface) -> void {
     }
 }
 
-auto ComputeConfig::reset(NBodyConfig initial_configuration) -> void {
+auto Compute::reset(NBodyConfig initial_configuration) -> void {
     if (tipsy_data_fp32_.positions.empty()) {
         if (use_cpu_) {
             compute_cpu_->reset(active_params_, initial_configuration);
@@ -244,7 +243,7 @@ auto ComputeConfig::reset(NBodyConfig initial_configuration) -> void {
     }
 }
 
-auto ComputeConfig::update_params() -> void {
+auto Compute::update_params() -> void {
     if (use_cpu_) {
         compute_cpu_->update_params(active_params_);
     } else {
@@ -252,7 +251,7 @@ auto ComputeConfig::update_params() -> void {
     }
 }
 
-auto ComputeConfig::get_milliseconds_passed() -> Milliseconds {
+auto Compute::get_milliseconds_passed() -> Milliseconds {
     // stop timer
     if (use_cpu_) {
         return compute_cpu_->get_milliseconds_passed();
@@ -260,7 +259,7 @@ auto ComputeConfig::get_milliseconds_passed() -> Milliseconds {
     return compute_cuda_->get_milliseconds_passed();
 }
 
-auto ComputeConfig::calculate_fps(int frame_count) -> void {
+auto Compute::calculate_fps(int frame_count) -> void {
     const auto milliseconds_passed = get_milliseconds_passed().count();
 
     const auto frequency = (1000.f / milliseconds_passed);
@@ -269,18 +268,18 @@ auto ComputeConfig::calculate_fps(int frame_count) -> void {
     compute_perf_stats(fps_);
 }
 
-auto ComputeConfig::run_benchmark(int nb_iterations) -> void {
+auto Compute::run_benchmark(int nb_iterations) -> void {
     const auto milliseconds = use_cpu_ ? compute_cpu_->run_benchmark(nb_iterations, active_params_.time_step) : compute_cuda_->run_benchmark(nb_iterations, active_params_.time_step);
 
     print_benchmark_results(nb_iterations, milliseconds.count());
 }
 
-auto ComputeConfig::compare_results() -> bool {
+auto Compute::compare_results() -> bool {
     assert(compute_cuda_);
     return compute_cuda_->compare_results(active_params_);
 }
 
-auto ComputeConfig::add_modifiable_parameters(ParamListGL& param_list) -> void {
+auto Compute::add_modifiable_parameters(ParamListGL& param_list) -> void {
     // Velocity Damping
     param_list.add_param(std::make_unique<Param<float>>("Velocity Damping", active_params_.damping, 0.5f, 1.0f, .0001f, &active_params_.damping));
     // Softening Factor

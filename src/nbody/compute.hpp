@@ -14,19 +14,19 @@ class Camera;
 class Interface;
 class ParamListGL;
 
-class ComputeConfig {
+class Compute {
  public:
-    ComputeConfig(bool                         enable_fp64,
-                  bool                         enable_cycle_demo,
-                  bool                         enable_cpu,
-                  bool                         enable_compare_to_cpu,
-                  bool                         enable_benchmark,
-                  bool                         enable_host_memory,
-                  int                          device,
-                  int                          nb_requested_devices,
-                  int                          block_size,
-                  std::size_t                  nb_bodies,
-                  const std::filesystem::path& tipsy_file);
+    Compute(bool                         enable_fp64,
+            bool                         enable_cycle_demo,
+            bool                         enable_cpu,
+            bool                         enable_compare_to_cpu,
+            bool                         enable_benchmark,
+            bool                         enable_host_memory,
+            int                          device,
+            int                          nb_requested_devices,
+            int                          block_size,
+            std::size_t                  nb_bodies,
+            const std::filesystem::path& tipsy_file);
 
     auto nb_bodies() const noexcept { return num_bodies_; }
 
@@ -68,7 +68,7 @@ class ComputeConfig {
 
     auto calculate_fps(int frame_count) -> void;
 
-    ~ComputeConfig() noexcept;
+    ~Compute() noexcept;
 
  private:
     using Clock        = std::chrono::steady_clock;

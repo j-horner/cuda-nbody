@@ -6,7 +6,7 @@
 #include <span>
 
 class Camera;
-class ComputeConfig;
+class Compute;
 
 class Interface {
  public:
@@ -17,7 +17,7 @@ class Interface {
     auto cycle_display_mode() noexcept -> void { display_mode_ = (ParticleRenderer::DisplayMode)((display_mode_ + 1) % ParticleRenderer::PARTICLE_NUM_MODES); }
     auto togle_display() noexcept -> void { display_enabled = !display_enabled; }
 
-    auto display(ComputeConfig& compute, Camera& camera) -> void;
+    auto display(Compute& compute, Camera& camera) -> void;
 
     auto is_mouse_over_sliders(int x, int y) noexcept -> bool { return show_sliders_ && param_list_.is_mouse_over(x, y); }
 

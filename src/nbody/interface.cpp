@@ -20,7 +20,7 @@ Interface::Interface(bool display_sliders, ParamListGL parameters, bool enable_f
     param_list_.add_param(std::make_unique<Param<float>>("Point Size", point_size_, 0.001f, 10.0f, 0.01f, &point_size_));
 }
 
-auto Interface::display(ComputeConfig& compute, Camera& camera) -> void {
+auto Interface::display(Compute& compute, Camera& camera) -> void {
     compute.update_simulation(camera);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

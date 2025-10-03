@@ -2,7 +2,7 @@
 
 class Camera;
 class Interface;
-class ComputeConfig;
+class Compute;
 
 class Controls {
  public:
@@ -14,13 +14,13 @@ class Controls {
     /// @param x        Window relative x coordinate of the mouse.
     /// @param y        Window relative y coordinate of the mouse.
     ///
-    auto mouse(int button, int state, int x, int y, Interface& interface, ComputeConfig& compute) -> void;
+    auto mouse(int button, int state, int x, int y, Interface& interface, Compute& compute) -> void;
 
     ///
     ///  @brief     The motion callback for a window is called when the mouse moves within the window while one or more mouse buttons are pressed.
     ///             "passive_motion" would be the relevant function to use if no mouse button is pressed.
     ///
-    auto motion(int x, int y, const Interface& interface, Camera& camera, ComputeConfig& compute) -> void;
+    auto motion(int x, int y, const Interface& interface, Camera& camera, Compute& compute) -> void;
 
     ///
     /// @brief  When a user types into the window, each key press generating an ASCII character will generate a keyboard callback.
@@ -33,7 +33,7 @@ class Controls {
     /// @param
     /// @param camera
     /// @return
-    static auto keyboard(unsigned char key, int x, int y, ComputeConfig& compute, Interface& interface, Camera& camera) -> void;
+    static auto keyboard(unsigned char key, int x, int y, Compute& compute, Interface& interface, Camera& camera) -> void;
 
  private:
     auto move_camera(Camera& camera, int x, int y) noexcept -> void;

@@ -44,7 +44,7 @@ auto Controls::move_camera(Camera& camera, int x, int y) noexcept -> void {
     old_y_ = y;
 }
 
-auto Controls::mouse(int button, int state, int x, int y, Interface& interface, ComputeConfig& compute) -> void {
+auto Controls::mouse(int button, int state, int x, int y, Interface& interface, Compute& compute) -> void {
     if (interface.is_mouse_over_sliders(x, y)) {
         // call list mouse function
         interface.modify_sliders(button, state, x, y);
@@ -56,7 +56,7 @@ auto Controls::mouse(int button, int state, int x, int y, Interface& interface, 
     glutPostRedisplay();
 }
 
-auto Controls::motion(int x, int y, const Interface& interface, Camera& camera, ComputeConfig& compute) -> void {
+auto Controls::motion(int x, int y, const Interface& interface, Camera& camera, Compute& compute) -> void {
     if (interface.show_sliders()) {
         // call parameter list motion function
         if (interface.motion(x, y)) {
@@ -72,7 +72,7 @@ auto Controls::motion(int x, int y, const Interface& interface, Camera& camera, 
     glutPostRedisplay();
 }
 
-auto Controls::keyboard(unsigned char key, [[maybe_unused]] int x, [[maybe_unused]] int y, ComputeConfig& compute, Interface& interface, Camera& camera) -> void {
+auto Controls::keyboard(unsigned char key, [[maybe_unused]] int x, [[maybe_unused]] int y, Compute& compute, Interface& interface, Camera& camera) -> void {
     using enum NBodyConfig;
 
     switch (key) {
