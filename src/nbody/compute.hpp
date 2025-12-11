@@ -22,8 +22,6 @@ class Compute {
             bool                         enable_compare_to_cpu,
             bool                         enable_benchmark,
             bool                         enable_host_memory,
-            int                          device,
-            int                          nb_requested_devices,
             int                          block_size,
             std::size_t                  nb_bodies,
             const std::filesystem::path& tipsy_file);

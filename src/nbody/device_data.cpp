@@ -2,7 +2,7 @@
 
 #include <cuda/api.hpp>
 
-template <std::floating_point T> DeviceData<T>::DeviceData(const cuda::device_t& device) : event_(cuda::event::create(device)) {}
+template <std::floating_point T> DeviceData<T>::DeviceData() : event_(cuda::event::create(cuda::device::current::get())) {}
 
 template <std::floating_point T> auto DeviceData<T>::record() const -> void {
     event_.record();

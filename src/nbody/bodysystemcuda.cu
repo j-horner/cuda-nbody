@@ -187,17 +187,7 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
     vel[deviceOffset + index]    = velocity;
 }
 
-template <typename T>
-void integrateNbodySystem(
-    DeviceData<T>&           main_device_data,
-    std::span<DeviceData<T>> secondary_device_data,
-    cudaGraphicsResource**   pgres,
-    unsigned int             currentRead,
-    float                    deltaTime,
-    float                    damping,
-    unsigned int             numBodies,
-    int                      blockSize,
-    bool                     bUsePBO) {
+template <typename T> void integrateNbodySystem(DeviceData<T>& main_device_data, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO) {
     if (bUsePBO) {
         checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[currentRead], cudaGraphicsMapFlagsReadOnly));
         checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[1 - currentRead], cudaGraphicsMapFlagsWriteDiscard));
@@ -233,59 +223,12 @@ void integrateNbodySystem(
         exit(EXIT_FAILURE);
     }
 
-    for (auto dev = 0u; dev < secondary_device_data.size(); ++dev) {
-        cudaSetDevice(dev + 1u);
-
-        integrate(secondary_device_data[dev]);
-
-        secondary_device_data[dev].record();
-        // MJH: Hack on older driver versions to force kernel launches to flush!
-        cudaStreamQuery(0);
-
-        // check if kernel invocation generated an error
-        const auto err = cudaGetLastError();
-
-        if (cudaSuccess != err) {
-            fprintf(stderr,
-                    "%s(%i) : getLastCudaError() CUDA error :"
-                    " %s : (%d) %s.\n",
-                    __FILE__,
-                    __LINE__,
-                    "Kernel execution failed",
-                    static_cast<int>(err),
-                    cudaGetErrorString(err));
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    for (auto& device : secondary_device_data) {
-        device.synchronise();
-    }
-
     if (bUsePBO) {
         checkCudaErrors(cudaGraphicsUnmapResources(2, pgres, 0));
     }
 }
 
 // Explicit specializations needed to generate code
-template void integrateNbodySystem<float>(
-    DeviceData<float>&           main_device_data,
-    std::span<DeviceData<float>> secondary_device_data,
-    cudaGraphicsResource**       pgres,
-    unsigned int                 currentRead,
-    float                        deltaTime,
-    float                        damping,
-    unsigned int                 numBodies,
-    int                          blockSize,
-    bool                         bUsePBO);
+template void integrateNbodySystem<float>(DeviceData<float>& main_device_data, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
 
-template void integrateNbodySystem<double>(
-    DeviceData<double>&           main_device_data,
-    std::span<DeviceData<double>> secondary_device_data,
-    cudaGraphicsResource**        pgres,
-    unsigned int                  currentRead,
-    float                         deltaTime,
-    float                         damping,
-    unsigned int                  numBodies,
-    int                           blockSize,
-    bool                          bUsePBO);
+template void integrateNbodySystem<double>(DeviceData<double>& main_device_data, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);

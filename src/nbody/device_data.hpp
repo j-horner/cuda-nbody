@@ -10,7 +10,7 @@ template <std::floating_point T> struct DeviceData {
     unsigned int offset;
     unsigned int nb_bodies;
 
-    DeviceData(const cuda::device_t& device);
+    DeviceData();
 
     auto record() const -> void;
     auto synchronise() const -> void;

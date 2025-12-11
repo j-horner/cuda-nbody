@@ -46,26 +46,15 @@
 #include <cstdio>
 #include <cstdlib>
 
-template <typename T>
-void integrateNbodySystem(
-    DeviceData<T>&           main_device_data,
-    std::span<DeviceData<T>> secondary_device_data,
-    cudaGraphicsResource**   pgres,
-    unsigned int             currentRead,
-    float                    deltaTime,
-    float                    damping,
-    unsigned int             numBodies,
-    int                      blockSize,
-    bool                     bUsePBO);
+template <typename T> void integrateNbodySystem(DeviceData<T>& main_device_data, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
 
 cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params)
-    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), dev_id_(deviceId), damping_(params.damping),
-      main_device_data_(cuda::device::get(dev_id_)) {
-    _initialize(nb_devices);
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params)
+    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), damping_(params.damping) {
+    _initialize();
 
     setSoftening(params.softening);
 
@@ -73,13 +62,13 @@ BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_de
 }
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), dev_id_(deviceId),
-      host_pos_vec_(std::move(positions)), host_vel_vec_(std::move(velocities)), damping_(params.damping), main_device_data_(cuda::device::get(dev_id_)) {
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), host_pos_vec_(std::move(positions)),
+      host_vel_vec_(std::move(velocities)), damping_(params.damping) {
     assert(host_pos_vec_.size() == nb_bodies_);
     assert(host_vel_vec_.size() == nb_bodies_);
 
-    _initialize(nb_devices);
+    _initialize();
 
     setSoftening(params.softening);
 
@@ -93,60 +82,11 @@ template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams
     set_velocity(host_vel_vec_);
 }
 
-template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned int nb_devices) -> void {
-    assert(nb_devices >= 1);
-    assert(nb_devices > 1 ? (dev_id_ == 0) : true);
+template <std::floating_point T> auto BodySystemCUDA<T>::_initialize() -> void {
     const auto memSize = sizeof(T) * 4 * nb_bodies_;
 
-    for (auto d = 1u; d < nb_devices; ++d) {
-        secondary_device_data_.emplace_back(cuda::device::get(d));
-    }
-
-    // divide up the workload amongst Devices
-    {
-        auto weights = std::vector<float>(nb_devices);
-        auto nb_sms  = std::vector<int>(nb_devices);
-        auto total   = 0.f;
-
-        for (auto i = 0u; i < nb_devices; ++i) {
-            const auto device = cuda::device::get(i);
-
-            // Choose the weight based on the Compute Capability
-            // We estimate that a CC2.0 SM is about 4.0x faster than a CC 1.x SM for this application (since a 15-SM GF100 is about 2X faster than a 30-SM GT200).
-            nb_sms[i]  = device.multiprocessor_count();
-            weights[i] = nb_sms[i] * (device.compute_capability().major() >= 2 ? 4.f : 1.f);
-            total += weights[i];
-        }
-
-        auto offset    = 0u;
-        auto remaining = nb_bodies_;
-
-        for (auto i = 0u; i < nb_devices; ++i) {
-            auto count = static_cast<unsigned int>((weights[i] / total) * nb_bodies_);
-            // Rounding up to nb_sms[i]*256 leads to better GPU utilization _per_ GPU but when using multiple devices, it will lead to the last GPUs not having any work at all which means worse overall performance.
-            // unsigned int round = nb_sms[i] * 256;
-            constexpr auto round = 256u;
-
-            count = round * ((count + round - 1) / round);
-            if (count > remaining) {
-                count = remaining;
-            }
-
-            remaining -= count;
-            if (i == 0) {
-                main_device_data_.offset    = offset;
-                main_device_data_.nb_bodies = count;
-            } else {
-                secondary_device_data_[i - 1].offset    = offset;
-                secondary_device_data_[i - 1].nb_bodies = count;
-            }
-            offset += count;
-        }
-
-        if (offset < nb_bodies_ - 1) {
-            secondary_device_data_.back().nb_bodies += nb_bodies_ - offset;
-        }
-    }
+    main_device_data_.offset    = 0;
+    main_device_data_.nb_bodies = nb_bodies_;
 
     if (use_sys_mem_) {
         checkCudaErrors(cudaHostAlloc((void**)&host_pos_[0], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
@@ -160,22 +100,12 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned in
         checkCudaErrors(cudaHostGetDevicePointer((void**)&main_device_data_.pos[0], (void*)host_pos_[0], 0));
         checkCudaErrors(cudaHostGetDevicePointer((void**)&main_device_data_.pos[1], (void*)host_pos_[1], 0));
         checkCudaErrors(cudaHostGetDevicePointer((void**)&main_device_data_.vel, (void*)host_vel_, 0));
-
-        for (auto i = 0u; i < nb_devices - 1; i++) {
-            checkCudaErrors(cudaSetDevice(i + 1));
-
-            checkCudaErrors(cudaHostGetDevicePointer((void**)&secondary_device_data_[i].pos[0], (void*)host_pos_[0], 0));
-            checkCudaErrors(cudaHostGetDevicePointer((void**)&secondary_device_data_[i].pos[1], (void*)host_pos_[1], 0));
-            checkCudaErrors(cudaHostGetDevicePointer((void**)&secondary_device_data_[i].vel, (void*)host_vel_, 0));
-        }
     } else {
         host_pos_[0] = new T[nb_bodies_ * 4];
         host_vel_    = new T[nb_bodies_ * 4];
 
         memset(host_pos_[0], 0, memSize);
         memset(host_vel_, 0, memSize);
-
-        checkCudaErrors(cudaSetDevice(dev_id_));
 
         if (use_pbo_) {
             // create the position pixel buffer objects for rendering
@@ -202,27 +132,6 @@ template <std::floating_point T> auto BodySystemCUDA<T>::_initialize(unsigned in
         }
 
         checkCudaErrors(cudaMalloc((void**)&main_device_data_.vel, memSize));
-
-        // At this point we already know P2P is supported
-        if (use_p2p_) {
-            for (auto i = 0u; i < nb_devices - 1; ++i) {
-                cudaError_t error;
-
-                // Enable access for gpu_i to memory owned by gpu0
-                checkCudaErrors(cudaSetDevice(i + 1));
-                if ((error = cudaDeviceEnablePeerAccess(0, 0)) != cudaErrorPeerAccessAlreadyEnabled) {
-                    checkCudaErrors(error);
-                } else {
-                    // We might have already enabled P2P, so catch this and reset error code...
-                    cudaGetLastError();
-                }
-
-                // Point all GPUs to the memory allocated on gpu0
-                secondary_device_data_[i].pos[0] = main_device_data_.pos[0];
-                secondary_device_data_[i].pos[1] = main_device_data_.pos[1];
-                secondary_device_data_[i].vel    = main_device_data_.vel;
-            }
-        }
     }
 }
 
@@ -253,19 +162,11 @@ template <std::floating_point T> BodySystemCUDA<T>::~BodySystemCUDA() noexcept {
 template <std::floating_point T> auto BodySystemCUDA<T>::setSoftening(T softening) -> void {
     T softeningSq = softening * softening;
 
-    const auto nb_devices = secondary_device_data_.size() + 1;
-
-    for (auto i = 0u; i < nb_devices; i++) {
-        if (!secondary_device_data_.empty()) {
-            checkCudaErrors(cudaSetDevice(i));
-        }
-
-        checkCudaErrors(setSofteningSquared(softeningSq));
-    }
+    checkCudaErrors(setSofteningSquared(softeningSq));
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(main_device_data_, secondary_device_data_, graphics_resource_, current_read_, (float)deltaTime, (float)damping_, nb_bodies_, block_size_, use_pbo_);
+    integrateNbodySystem<T>(main_device_data_, graphics_resource_, current_read_, (float)deltaTime, (float)damping_, nb_bodies_, block_size_, use_pbo_);
 
     std::swap(current_read_, current_write_);
 }

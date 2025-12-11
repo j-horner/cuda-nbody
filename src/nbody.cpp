@@ -158,8 +158,6 @@ struct Options {
     bool                  hostmem    = false;
     bool                  benchmark  = false;
     std::size_t           numbodies  = 0;
-    int                   device     = -1;
-    int                   numdevices = 0;
     bool                  compare    = false;
     bool                  qatest     = false;
     bool                  cpu        = false;
@@ -180,8 +178,6 @@ auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
     app.add_flag("--hostmem", options.hostmem, "Stores simulation data in host memory");
     app.add_flag("--benchmark", options.benchmark, "Run benchmark to measure performance");
     app.add_option("--numbodies", options.numbodies, "Number of bodies (>= 1) to run in simulation")->check(CLI::Range(std::size_t{1u}, std::numeric_limits<std::size_t>::max()));
-    const auto device_opt = app.add_option("--device", options.device, "The CUDA device to use")->check(CLI::Range(0, std::numeric_limits<int>::max()));
-    app.add_option("--numdevices", options.numdevices, "Number of CUDA devices (> 0) to use for simulation")->check(CLI::Range(std::size_t{1u}, std::numeric_limits<std::size_t>::max()))->excludes(device_opt);
     app.add_flag("--compare", options.compare, "Compares simulation results running once on the default GPU and once on the CPU");
     app.add_flag("--qatest", options.qatest, "Runs a QA test");
     app.add_flag("--cpu", options.cpu, "Run n-body simulation on the CPU");
@@ -269,18 +265,7 @@ auto main(int argc, char** argv) -> int {
 
         const auto compare_to_cpu = (cmd_options.compare || cmd_options.qatest) && (!cmd_options.cpu);
 
-        auto compute = Compute(
-            cmd_options.fp64,
-            cycle_demo,
-            cmd_options.cpu,
-            compare_to_cpu,
-            cmd_options.benchmark,
-            cmd_options.hostmem,
-            cmd_options.device,
-            cmd_options.numdevices,
-            cmd_options.block_size,
-            cmd_options.numbodies,
-            tipsy_file);
+        auto compute = Compute(cmd_options.fp64, cycle_demo, cmd_options.cpu, compare_to_cpu, cmd_options.benchmark, cmd_options.hostmem, cmd_options.block_size, cmd_options.numbodies, tipsy_file);
 
         if (cmd_options.benchmark) {
             const auto nb_iterations = cmd_options.iterations == 0 ? 10 : static_cast<int>(cmd_options.iterations);

@@ -26,8 +26,6 @@ Compute::Compute(bool                         enable_fp64,
                  bool                         enable_compare_to_cpu,
                  bool                         enable_benchmark,
                  bool                         enable_host_memory,
-                 int                          device,
-                 int                          nb_requested_devices,
                  int                          block_size,
                  std::size_t                  nb_bodies,
                  const std::filesystem::path& tipsy_file)
@@ -52,25 +50,14 @@ Compute::Compute(bool                         enable_fp64,
         if (use_cpu_) {
             compute_cpu_ = std::make_unique<ComputeCPU>(enable_fp64, nb_bodies, active_params_, tipsy_data_fp32_.positions, tipsy_data_fp32_.velocities, tipsy_data_fp64_.positions, tipsy_data_fp64_.velocities);
         } else {
-            compute_cuda_ = std::make_unique<ComputeCUDA>(
-                nb_requested_devices,
-                enable_host_memory,
-                use_pbo,
-                device,
-                block_size,
-                enable_fp64,
-                nb_bodies,
-                active_params_,
-                tipsy_data_fp32_.positions,
-                tipsy_data_fp32_.velocities,
-                tipsy_data_fp64_.positions,
-                tipsy_data_fp64_.velocities);
+            compute_cuda_ = std::make_unique<
+                ComputeCUDA>(enable_host_memory, use_pbo, block_size, enable_fp64, nb_bodies, active_params_, tipsy_data_fp32_.positions, tipsy_data_fp32_.velocities, tipsy_data_fp64_.positions, tipsy_data_fp64_.velocities);
         }
     } else {
         if (use_cpu_) {
             compute_cpu_ = std::make_unique<ComputeCPU>(enable_fp64, nb_bodies, active_params_);
         } else {
-            compute_cuda_ = std::make_unique<ComputeCUDA>(nb_requested_devices, enable_host_memory, use_pbo, device, block_size, enable_fp64, nb_bodies, active_params_);
+            compute_cuda_ = std::make_unique<ComputeCUDA>(enable_host_memory, use_pbo, block_size, enable_fp64, nb_bodies, active_params_);
         }
     }
 

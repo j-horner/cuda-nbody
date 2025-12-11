@@ -11,8 +11,8 @@
 
 namespace {
 // General GPU Device CUDA Initialization
-auto initialise_gpu(int device_id) -> cuda::device_t {
-    auto device = cuda::device::get(device_id);
+auto initialise_gpu() -> cuda::device_t {
+    auto device = cuda::device::current::get();
 
     using enum cuda::device::attribute_t;
 
@@ -28,106 +28,31 @@ auto initialise_gpu(int device_id) -> cuda::device_t {
         throw std::runtime_error("GPU device does not support CUDA.\n");
     }
 
-    cuda::device::current::set(device);
-
     device.architecture().name();
 
-    std::println("CUDA Device [{}]: \"{}\"\n", device_id, device.architecture().name());
+    std::println("CUDA Device: \"{}\"\n", device.architecture().name());
 
     return device;
 }
 
-// This function returns the best GPU (with maximum GFLOPS)
-auto get_max_flops_gpu(cuda::device::id_t nb_available_devices) -> int {
-    auto max_perf_device    = 0;
-    auto devices_prohibited = 0;
-
-    auto max_compute_perf = std::uint64_t{0};
-
-    // Find the best CUDA capable GPU device
-    for (auto dev_id = 0; dev_id < nb_available_devices; ++dev_id) {
-        const auto device = cuda::device::get(dev_id);
-
-        const auto compute_mode = device.get_attribute(CU_DEVICE_ATTRIBUTE_COMPUTE_MODE);
-        if (compute_mode == CU_COMPUTEMODE_PROHIBITED) {
-            ++devices_prohibited;
-            continue;
-        }
-
-        const auto compute_capability = device.compute_capability();
-
-        const auto major = compute_capability.major();
-        const auto minor = compute_capability.minor();
-
-        const auto sm_per_multiproc = (major == 9999 && minor == 9999) ? 1 : compute_capability.max_in_flight_threads_per_processor();
-
-        const auto multi_processor_count = static_cast<std::uint64_t>(device.multiprocessor_count());
-        const auto clock_rate            = static_cast<std::uint64_t>(device.get_attribute(CU_DEVICE_ATTRIBUTE_CLOCK_RATE));
-
-        const auto compute_perf = multi_processor_count * sm_per_multiproc * clock_rate;
-
-        if (compute_perf > max_compute_perf) {
-            max_compute_perf = compute_perf;
-            max_perf_device  = dev_id;
-        }
-    }
-
-    if (devices_prohibited == nb_available_devices) {
-        throw std::runtime_error("gpuGetMaxGflopsDeviceId() CUDA error: all devices have compute mode prohibited.\n");
-    }
-
-    const auto device = cuda::device::get(max_perf_device);
-
-    std::println(R"(GPU Device {}: "{}" with compute capability {}.{})", max_perf_device, device.architecture().name(), device.architecture().major, device.get_attribute(CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR));
-
-    return max_perf_device;
-}
-
-auto get_main_device(int& nb_requested_devices, int device_id) -> cuda::device_t {
-    const auto custom_gpu = device_id != -1;
-
-    if (nb_requested_devices > 0) {
-        std::println("number of CUDA devices requested  = {}", nb_requested_devices);
-    } else {
-        nb_requested_devices = 1;
-    }
-    assert(!(custom_gpu && (nb_requested_devices > 1)));
-
+auto get_main_device() -> cuda::device_t {
     const auto nb_devices_available = cuda::device::count();
 
     if (nb_devices_available == 0) {
         throw std::runtime_error("gpuDeviceInit() CUDA error: no devices supporting CUDA.\n");
     }
 
-    if (nb_devices_available < nb_requested_devices) {
-        throw std::invalid_argument(std::format("Error: only {} Devices available, {} requested.", nb_devices_available, nb_requested_devices));
-    }
-
-    if (device_id > nb_devices_available - 1) {
-        std::println(stderr, "\n>> {} CUDA capable GPU device(s) detected. <<", nb_devices_available);
-        std::println(stderr, ">> gpuDeviceInit (--device={}) is not a valid GPU device. <<\n", device_id);
-        throw std::invalid_argument(std::format("Could not use custom CUDA device: {}", device_id));
-    }
-
-    // If the command-line has a device number specified, use it
-    // Otherwise pick the device with highest Gflops/s
-    const auto dev_id = custom_gpu ? device_id : get_max_flops_gpu(nb_devices_available);
-
-    assert(dev_id >= 0);
-
-    return initialise_gpu(dev_id);
+    return initialise_gpu();
 }
 
 }    // namespace
 
-ComputeCUDA::ComputeCUDA(int nb_requested_devices, bool enable_host_mem, bool use_pbo, int device, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params)
-    : ComputeCUDA(nb_requested_devices, enable_host_mem, use_pbo, device, block_size, fp64_enabled, num_bodies, params, {}, {}, {}, {}) {}
+ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params)
+    : ComputeCUDA(enable_host_mem, use_pbo, block_size, fp64_enabled, num_bodies, params, {}, {}, {}, {}) {}
 
 ComputeCUDA::ComputeCUDA(
-    int                 nb_requested_devices,
     bool                enable_host_mem,
     bool                use_pbo,
-    int                 device_id,
     int                 block_size,
     double              fp64_enabled,
     std::size_t         num_bodies,
@@ -136,72 +61,32 @@ ComputeCUDA::ComputeCUDA(
     std::vector<float>  velocities_fp32,
     std::vector<double> positions_fp64,
     std::vector<double> velocities_fp64)
-    : ComputeCUDA(
-          nb_requested_devices,
-          enable_host_mem,
-          use_pbo,
-          get_main_device(nb_requested_devices, device_id),
-          block_size,
-          fp64_enabled,
-          num_bodies,
-          params,
-          std::move(positions_fp32),
-          std::move(velocities_fp32),
-          std::move(positions_fp64),
-          std::move(velocities_fp64)) {}
+    : fp64_enabled_(fp64_enabled), use_host_mem_(enable_host_mem), use_pbo_(use_pbo), host_mem_sync_event_(cuda::event::create(cuda::device::current::get())), start_event_(cuda::event::create(cuda::device::current::get())),
+      stop_event_(cuda::event::create(cuda::device::current::get())) {
+    const auto main_device = cuda::device::current::get();
 
-ComputeCUDA::ComputeCUDA(
-    int                  nb_requested_devices,
-    bool                 enable_host_mem,
-    bool                 use_pbo,
-    const cuda::device_t main_device,
-    int                  block_size,
-    double               fp64_enabled,
-    std::size_t          num_bodies,
-    const NBodyParams&   params,
-    std::vector<float>   positions_fp32,
-    std::vector<float>   velocities_fp32,
-    std::vector<double>  positions_fp64,
-    std::vector<double>  velocities_fp64)
-    : fp64_enabled_(fp64_enabled), use_host_mem_(enable_host_mem), use_pbo_(use_pbo), host_mem_sync_event_(cuda::event::create(main_device)), start_event_(cuda::event::create(main_device)),
-      stop_event_(cuda::event::create(main_device)) {
-    // Initialize devices
-    // If user did not explicitly request host memory to be used (false by default), we default to P2P.
-    // We fallback to host memory, if any of GPUs does not support P2P.
-    for (auto i = 0; i < nb_requested_devices; ++i) {
-        const auto dev                = cuda::device::get(i);
-        const auto compute_capability = dev.compute_capability();
+    const auto compute_capability = main_device.compute_capability();
 
-        const auto major = compute_capability.major();
-        const auto minor = compute_capability.minor();
+    const auto major = compute_capability.major();
+    const auto minor = compute_capability.minor();
 
-        std::println("> Compute {}.{} CUDA device: [{}]", major, minor, dev.name());
+    std::println("> Compute {}.{} CUDA device: [{}]", major, minor, main_device.name());
 
-        // Enable P2P only in one direction, as every peer will access gpu0
-        if (!(use_host_mem_ || (dev == main_device) || dev.can_access(main_device))) {
-            use_host_mem_ = true;
+    if (use_host_mem_) {
+        if (!main_device.properties().can_map_host_memory()) {
+            throw std::invalid_argument(std::format("Device {} cannot map host memory!", main_device.name()));
         }
 
-        if (use_host_mem_) {
-            if (!dev.properties().can_map_host_memory()) {
-                throw std::invalid_argument(std::format("Device {} cannot map host memory!", i));
-            }
+        const auto result = cudaSetDeviceFlags(cudaDeviceMapHost);
 
-            cuda::device::current::set(dev);
-
-            const auto result = cudaSetDeviceFlags(cudaDeviceMapHost);
-
-            if (result) {
-                throw std::runtime_error(std::format("CUDA error. Could not set device flag cudaDeviceMapHost for device {} ({}): {} - {}", i, dev.name(), static_cast<unsigned int>(result), cudaGetErrorName(result)));
-            }
+        if (result) {
+            throw std::runtime_error(std::format("CUDA error. Could not set device flag cudaDeviceMapHost for device {}: {} - {}", main_device.name(), static_cast<unsigned int>(result), cudaGetErrorName(result)));
         }
+    }
 
-        // CC 1.2 and earlier do not support double precision
-        if (major * 10 + minor <= 12) {
-            double_supported_ = false;
-        }
-
-        cuda::device::current::set(main_device);
+    // CC 1.2 and earlier do not support double precision
+    if (major * 10 + minor <= 12) {
+        double_supported_ = false;
     }
 
     if (fp64_enabled_ && (!double_supported_)) {
@@ -221,34 +106,27 @@ ComputeCUDA::ComputeCUDA(
         } else {
             std::println("number of bodies = {}", nb_bodies_);
         }
-    } else if (nb_requested_devices == 1) {
+    } else {
         // default number of bodies is #SMs * 4 * CTA size
         nb_bodies_ = num_bodies != 0 ? num_bodies : block_size * 4 * main_device.multiprocessor_count();
-    } else {
-        nb_bodies_ = 0;
-        for (auto i = 0; i < nb_requested_devices; ++i) {
-            const auto dev = cuda::device::get(i);
-            nb_bodies_ += block_size * (dev.compute_capability().major() >= 2 ? 4 : 1) * dev.multiprocessor_count();
-        }
     }
 
     std::println("> Simulation data stored in {} memory", use_host_mem_ ? "system" : "video");
     std::println("> {} precision floating point simulation", fp64_enabled_ ? "Double" : "Single");
-    std::println("> {} Devices used for simulation", nb_requested_devices);
 
     const auto use_p2p = !use_host_mem_;
 
     if (!positions_fp32.empty()) {
-        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, nb_requested_devices, block_size, use_p2p, main_device.id(), params, std::move(positions_fp32), std::move(velocities_fp32));
+        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, block_size, use_p2p, params, std::move(positions_fp32), std::move(velocities_fp32));
 
         if (double_supported_) {
-            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, nb_requested_devices, block_size, use_p2p, main_device.id(), params, std::move(positions_fp64), std::move(velocities_fp64));
+            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, block_size, use_p2p, params, std::move(positions_fp64), std::move(velocities_fp64));
         }
     } else {
-        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, nb_requested_devices, block_size, use_p2p, main_device.id(), params);
+        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, block_size, use_p2p, params);
 
         if (double_supported_) {
-            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, nb_requested_devices, block_size, use_p2p, main_device.id(), params);
+            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, block_size, use_p2p, params);
         }
     }
 

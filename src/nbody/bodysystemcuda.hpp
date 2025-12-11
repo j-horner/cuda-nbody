@@ -47,8 +47,8 @@ template <std::floating_point T> class BodySystemCUDA {
     using Type                    = T;
     constexpr static auto use_cpu = false;
 
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params);
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int nb_devices, unsigned int blockSize, bool useP2P, int deviceId, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
@@ -69,17 +69,15 @@ template <std::floating_point T> class BodySystemCUDA {
  private:    // methods
     auto setSoftening(T softening) -> void;
 
-    auto _initialize(unsigned int nb_devices) -> void;
+    auto _initialize() -> void;
 
     unsigned int nb_bodies_;
-    int          dev_id_;
 
     // Host data
     std::array<T*, 2> host_pos_{nullptr, nullptr};
     T*                host_vel_ = nullptr;
 
-    DeviceData<T>              main_device_data_;
-    std::vector<DeviceData<T>> secondary_device_data_;
+    DeviceData<T> main_device_data_;
 
     std::vector<T> host_pos_vec_ = std::vector(nb_bodies_ * 4, T{0});
     std::vector<T> host_vel_vec_ = std::vector(nb_bodies_ * 4, T{0});

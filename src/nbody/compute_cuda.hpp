@@ -20,12 +20,10 @@ class device_t;
 
 class ComputeCUDA {
  public:
-    ComputeCUDA(int nb_requested_devices, bool enable_host_mem, bool use_pbo, int device, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
+    ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
 
-    ComputeCUDA(int                 nb_requested_devices,
-                bool                enable_host_mem,
+    ComputeCUDA(bool                enable_host_mem,
                 bool                use_pbo,
-                int                 device,
                 int                 block_size,
                 double              fp64_enabled,
                 std::size_t         num_bodies,
@@ -66,19 +64,6 @@ class ComputeCUDA {
     ~ComputeCUDA() noexcept;
 
  private:
-    ComputeCUDA(int                  nb_requested_devices,
-                bool                 enable_host_mem,
-                bool                 use_pbo,
-                const cuda::device_t main_device,
-                int                  block_size,
-                double               fp64_enabled,
-                std::size_t          num_bodies,
-                const NBodyParams&   params,
-                std::vector<float>   positions_fp32,
-                std::vector<float>   velocities_fp32,
-                std::vector<double>  positions_fp64,
-                std::vector<double>  velocities_fp64);
-
     template <std::floating_point TNew, std::floating_point TOld> auto switch_precision(BodySystemCUDA<TNew>& new_nbody, const BodySystemCUDA<TOld>& old_nbody) -> void;
 
     template <std::floating_point T> auto run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> Milliseconds;
