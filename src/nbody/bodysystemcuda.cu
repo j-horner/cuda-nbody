@@ -25,7 +25,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "device_data.hpp"
 #include "helper_cuda.hpp"
 #include "vec.hpp"
 
@@ -148,8 +147,7 @@ template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, vec4<
     return acc;
 }
 
-template <typename T>
-__global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceOffset, unsigned int deviceNumBodies, float deltaTime, float damping, int numTiles) {
+template <typename T> __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceNumBodies, float deltaTime, float damping, int numTiles) {
     // Handle to thread block group
     cg::thread_block cta   = cg::this_thread_block();
     int              index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -158,7 +156,7 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
         return;
     }
 
-    vec4<T> position = oldPos[deviceOffset + index];
+    vec4<T> position = oldPos[index];
 
     vec3<T> accel = computeBodyAccel<T>(position, oldPos, numTiles, cta);
 
@@ -167,7 +165,7 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
     // note we factor out the body's mass from the equation, here and in
     // bodyBodyInteraction
     // (because they cancel out).  Thus here force == acceleration
-    vec4<T> velocity = vel[deviceOffset + index];
+    vec4<T> velocity = vel[index];
 
     velocity.x += accel.x * deltaTime;
     velocity.y += accel.y * deltaTime;
@@ -183,30 +181,27 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
     position.z += velocity.z * deltaTime;
 
     // store new position and velocity
-    newPos[deviceOffset + index] = position;
-    vel[deviceOffset + index]    = velocity;
+    newPos[index] = position;
+    vel[index]    = velocity;
 }
 
-template <typename T> void integrateNbodySystem(DeviceData<T>& main_device_data, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO) {
+template <typename T>
+void integrateNbodySystem(std::array<T*, 2>& positions, T* velocities, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO) {
     if (bUsePBO) {
         checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[currentRead], cudaGraphicsMapFlagsReadOnly));
         checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[1 - currentRead], cudaGraphicsMapFlagsWriteDiscard));
         checkCudaErrors(cudaGraphicsMapResources(2, pgres, 0));
         size_t bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(main_device_data.pos[currentRead]), &bytes, pgres[currentRead]));
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(main_device_data.pos[1 - currentRead]), &bytes, pgres[1 - currentRead]));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(positions[currentRead]), &bytes, pgres[currentRead]));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(positions[1 - currentRead]), &bytes, pgres[1 - currentRead]));
     }
 
-    auto integrate = [&](DeviceData<T>& device) {
-        const auto numBlocks     = (device.nb_bodies + blockSize - 1) / blockSize;
-        const auto numTiles      = (numBodies + blockSize - 1) / blockSize;
+    {
+        const auto numBlocks     = (numBodies + blockSize - 1) / blockSize;
         const auto sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
 
-        integrateBodies<T>
-            <<<numBlocks, blockSize, sharedMemSize>>>((vec4<T>*)device.pos[1 - currentRead], (vec4<T>*)device.pos[currentRead], (vec4<T>*)device.vel, device.offset, device.nb_bodies, deltaTime, damping, numTiles);
-    };
-
-    integrate(main_device_data);
+        integrateBodies<T><<<numBlocks, blockSize, sharedMemSize>>>((vec4<T>*)positions[1 - currentRead], (vec4<T>*)positions[currentRead], (vec4<T>*)velocities, numBodies, deltaTime, damping, numBlocks);
+    }
 
     // check if kernel invocation generated an error
     const auto err = cudaGetLastError();
@@ -229,6 +224,8 @@ template <typename T> void integrateNbodySystem(DeviceData<T>& main_device_data,
 }
 
 // Explicit specializations needed to generate code
-template void integrateNbodySystem<float>(DeviceData<float>& main_device_data, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
+template void
+integrateNbodySystem<float>(std::array<float*, 2>& positions, float* velocities, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
 
-template void integrateNbodySystem<double>(DeviceData<double>& main_device_data, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
+template void
+integrateNbodySystem<double>(std::array<double*, 2>& positions, double* velocities, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);

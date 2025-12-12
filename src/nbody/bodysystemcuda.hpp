@@ -27,10 +27,8 @@
 
 #pragma once
 
-#include "device_data.hpp"
 #include "nbody_config.hpp"
 
-#include <cuda/api.hpp>
 #include <cuda_runtime.h>
 
 #include <array>
@@ -77,7 +75,9 @@ template <std::floating_point T> class BodySystemCUDA {
     std::array<T*, 2> host_pos_{nullptr, nullptr};
     T*                host_vel_ = nullptr;
 
-    DeviceData<T> main_device_data_;
+    // Device data
+    std::array<T*, 2> device_pos_{nullptr, nullptr};
+    T*                device_vel_ = nullptr;
 
     std::vector<T> host_pos_vec_ = std::vector(nb_bodies_ * 4, T{0});
     std::vector<T> host_vel_vec_ = std::vector(nb_bodies_ * 4, T{0});
