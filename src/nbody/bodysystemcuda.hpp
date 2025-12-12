@@ -101,8 +101,8 @@ template <std::floating_point T> class BodySystemCUDADefault : public BodySystem
     auto _initialize() -> void;
 
     // Host data
-    std::array<T*, 2> host_pos_{nullptr, nullptr};
-    T*                host_vel_ = nullptr;
+    mutable std::vector<T> host_pos_;
+    mutable std::vector<T> host_vel_;
 
     // Device data
     std::array<T*, 2> device_pos_{nullptr, nullptr};
@@ -133,8 +133,8 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
     auto _initialize() -> void;
 
     // Host data
-    std::array<T*, 2> host_pos_{nullptr, nullptr};
-    T*                host_vel_ = nullptr;
+    mutable std::vector<T> host_pos_;
+    mutable std::vector<T> host_vel_;
 
     // Device data
     std::array<T*, 2> device_pos_{nullptr, nullptr};

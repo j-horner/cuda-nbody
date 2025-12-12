@@ -98,13 +98,10 @@ BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, unsigned
 }
 
 template <std::floating_point T> auto BodySystemCUDADefault<T>::_initialize() -> void {
+    host_pos_.resize(this->nb_bodies_ * 4, 0);
+    host_vel_.resize(this->nb_bodies_ * 4, 0);
+
     const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
-
-    host_pos_[0] = new T[this->nb_bodies_ * 4];
-    host_vel_    = new T[this->nb_bodies_ * 4];
-
-    memset(host_pos_[0], 0, memSize);
-    memset(host_vel_, 0, memSize);
 
     checkCudaErrors(cudaMalloc((void**)&device_pos_[0], memSize));
     checkCudaErrors(cudaMalloc((void**)&device_pos_[1], memSize));
@@ -112,10 +109,6 @@ template <std::floating_point T> auto BodySystemCUDADefault<T>::_initialize() ->
 }
 
 template <std::floating_point T> BodySystemCUDADefault<T>::~BodySystemCUDADefault() noexcept {
-    delete[] host_pos_[0];
-    delete[] host_pos_[1];
-    delete[] host_vel_;
-
     checkCudaErrors(cudaFree((void**)device_pos_[0]));
     checkCudaErrors(cudaFree((void**)device_pos_[1]));
     checkCudaErrors(cudaFree((void**)device_vel_));
@@ -128,16 +121,14 @@ template <std::floating_point T> auto BodySystemCUDADefault<T>::update(T deltaTi
 }
 
 template <std::floating_point T> auto BodySystemCUDADefault<T>::get_position() const -> std::span<const T> {
-    const auto hdata = host_pos_[0];
+    checkCudaErrors(cudaMemcpy(host_pos_.data(), device_pos_[this->current_read_], this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
 
-    checkCudaErrors(cudaMemcpy(hdata, device_pos_[this->current_read_], this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
-
-    return {hdata, this->nb_bodies_ * 4};
+    return host_pos_;
 }
 template <std::floating_point T> auto BodySystemCUDADefault<T>::get_velocity() const -> std::span<const T> {
-    checkCudaErrors(cudaMemcpy(host_vel_, device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(host_vel_.data(), device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
 
-    return {host_vel_, this->nb_bodies_ * 4};
+    return host_vel_;
 }
 
 template <std::floating_point T> auto BodySystemCUDADefault<T>::set_position(std::span<const T> data) -> void {
@@ -175,11 +166,8 @@ BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsign
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::_initialize() -> void {
     const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
 
-    host_pos_[0] = new T[this->nb_bodies_ * 4];
-    host_vel_    = new T[this->nb_bodies_ * 4];
-
-    memset(host_pos_[0], 0, memSize);
-    memset(host_vel_, 0, memSize);
+    host_pos_.resize(this->nb_bodies_ * 4, 0);
+    host_vel_.resize(this->nb_bodies_ * 4, 0);
 
     // create the position pixel buffer objects for rendering
     // we will actually compute directly from this memory in CUDA too
@@ -187,7 +175,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::_initialize() -
 
     for (int i = 0; i < 2; ++i) {
         glBindBuffer(GL_ARRAY_BUFFER, pbo_[i]);
-        glBufferData(GL_ARRAY_BUFFER, memSize, host_pos_[0], GL_DYNAMIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, memSize, host_pos_.data(), GL_DYNAMIC_DRAW);
 
         int size = 0;
         glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&size);
@@ -204,10 +192,6 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::_initialize() -
 }
 
 template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraphics() noexcept {
-    delete[] host_pos_[0];
-    delete[] host_pos_[1];
-    delete[] host_vel_;
-
     checkCudaErrors(cudaFree((void**)device_vel_));
 
     checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[0]));
@@ -222,9 +206,6 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaT
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() const -> std::span<const T> {
-    constexpr auto currentReadHost = 0;
-
-    const auto hdata = host_pos_[currentReadHost];
     const auto ddata = device_pos_[this->current_read_];
 
     {
@@ -235,17 +216,17 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() 
         size_t bytes;
         checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&ddata, &bytes, pgres));
 
-        checkCudaErrors(cudaMemcpy(hdata, ddata, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+        checkCudaErrors(cudaMemcpy(host_pos_.data(), ddata, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
 
         checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
     }
 
-    return {hdata, this->nb_bodies_ * 4};
+    return host_pos_;
 }
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_velocity() const -> std::span<const T> {
-    checkCudaErrors(cudaMemcpy(host_vel_, device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaMemcpy(host_vel_.data(), device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
 
-    return {host_vel_, this->nb_bodies_ * 4};
+    return host_vel_;
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_position(std::span<const T> data) -> void {
