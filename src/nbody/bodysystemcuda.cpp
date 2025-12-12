@@ -46,8 +46,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-template <typename T>
-void integrateNbodySystem(std::array<T*, 2>& positions, T* velocities, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
+template <typename T> void integrateNbodySystem(const std::array<T*, 2>& positions, T* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
 
 cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
@@ -115,7 +114,7 @@ template <std::floating_point T> BodySystemCUDADefault<T>::~BodySystemCUDADefaul
 }
 
 template <std::floating_point T> auto BodySystemCUDADefault<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_, device_vel_, nullptr, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_, false);
+    integrateNbodySystem<T>(device_pos_, device_vel_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_);
 
     std::swap(this->current_read_, this->current_write_);
 }
@@ -200,7 +199,16 @@ template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraph
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_, device_vel_, graphics_resource_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_, true);
+    checkCudaErrors(cudaGraphicsResourceSetMapFlags(graphics_resource_[this->current_read_], cudaGraphicsMapFlagsReadOnly));
+    checkCudaErrors(cudaGraphicsResourceSetMapFlags(graphics_resource_[1 - this->current_read_], cudaGraphicsMapFlagsWriteDiscard));
+    checkCudaErrors(cudaGraphicsMapResources(2, graphics_resource_, 0));
+    size_t bytes;
+    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[this->current_read_]), &bytes, graphics_resource_[this->current_read_]));
+    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[1 - this->current_read_]), &bytes, graphics_resource_[1 - this->current_read_]));
+
+    integrateNbodySystem<T>(device_pos_, device_vel_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_);
+
+    checkCudaErrors(cudaGraphicsUnmapResources(2, graphics_resource_, 0));
 
     std::swap(this->current_read_, this->current_write_);
 }
@@ -294,7 +302,7 @@ template <std::floating_point T> BodySystemCUDAHostMemory<T>::~BodySystemCUDAHos
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_, device_vel_, nullptr, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_, false);
+    integrateNbodySystem<T>(device_pos_, device_vel_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_);
 
     std::swap(this->current_read_, this->current_write_);
 }

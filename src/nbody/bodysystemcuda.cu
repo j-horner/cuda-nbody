@@ -28,12 +28,8 @@
 #include "helper_cuda.hpp"
 #include "vec.hpp"
 
-// needed before <cuda_gl_interop.h> apparently...
-#include <GL/freeglut.h>
-
 // CUDA standard includes
 #include <cooperative_groups.h>
-#include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 
 #include <span>
@@ -185,17 +181,7 @@ template <typename T> __global__ void integrateBodies(vec4<T>* __restrict__ newP
     vel[index]    = velocity;
 }
 
-template <typename T>
-void integrateNbodySystem(std::array<T*, 2>& positions, T* velocities, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO) {
-    if (bUsePBO) {
-        checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[currentRead], cudaGraphicsMapFlagsReadOnly));
-        checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[1 - currentRead], cudaGraphicsMapFlagsWriteDiscard));
-        checkCudaErrors(cudaGraphicsMapResources(2, pgres, 0));
-        size_t bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(positions[currentRead]), &bytes, pgres[currentRead]));
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(positions[1 - currentRead]), &bytes, pgres[1 - currentRead]));
-    }
-
+template <typename T> void integrateNbodySystem(const std::array<T*, 2>& positions, T* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize) {
     {
         const auto numBlocks     = (numBodies + blockSize - 1) / blockSize;
         const auto sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
@@ -217,15 +203,9 @@ void integrateNbodySystem(std::array<T*, 2>& positions, T* velocities, cudaGraph
                 cudaGetErrorString(err));
         exit(EXIT_FAILURE);
     }
-
-    if (bUsePBO) {
-        checkCudaErrors(cudaGraphicsUnmapResources(2, pgres, 0));
-    }
 }
 
 // Explicit specializations needed to generate code
-template void
-integrateNbodySystem<float>(std::array<float*, 2>& positions, float* velocities, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
+template void integrateNbodySystem<float>(const std::array<float*, 2>& positions, float* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
 
-template void
-integrateNbodySystem<double>(std::array<double*, 2>& positions, double* velocities, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize, bool bUsePBO);
+template void integrateNbodySystem<double>(const std::array<double*, 2>& positions, double* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
