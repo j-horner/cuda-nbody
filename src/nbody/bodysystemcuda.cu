@@ -29,6 +29,7 @@
 #include "vec.hpp"
 
 // CUDA standard includes
+
 #include <cooperative_groups.h>
 #include <cuda_runtime.h>
 
@@ -120,7 +121,7 @@ template <typename T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T>
     return ai;
 }
 
-template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, vec4<T>* positions, int numTiles, cg::thread_block cta) {
+template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, const vec4<T>* positions, int numTiles, cg::thread_block cta) {
     vec4<T>* sharedPos = SharedMemory<vec4<T>>();
 
     vec3<T> acc = {0.0f, 0.0f, 0.0f};
@@ -143,7 +144,7 @@ template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, vec4<
     return acc;
 }
 
-template <typename T> __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceNumBodies, float deltaTime, float damping, int numTiles) {
+template <typename T> __global__ void integrateBodies(vec4<T>* __restrict__ newPos, const vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceNumBodies, float deltaTime, float damping, int numTiles) {
     // Handle to thread block group
     cg::thread_block cta   = cg::this_thread_block();
     int              index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -181,12 +182,19 @@ template <typename T> __global__ void integrateBodies(vec4<T>* __restrict__ newP
     vel[index]    = velocity;
 }
 
-template <typename T> void integrateNbodySystem(const std::array<T*, 2>& positions, T* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize) {
+template <typename T> void integrateNbodySystem(T* new_positions, const T* old_positions, T* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize) {
     {
         const auto numBlocks     = (numBodies + blockSize - 1) / blockSize;
         const auto sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
 
-        integrateBodies<T><<<numBlocks, blockSize, sharedMemSize>>>((vec4<T>*)positions[1 - currentRead], (vec4<T>*)positions[currentRead], (vec4<T>*)velocities, numBodies, deltaTime, damping, numBlocks);
+        integrateBodies<T><<<numBlocks, blockSize, sharedMemSize>>>(
+            reinterpret_cast<vec4<T>*>(new_positions),
+            reinterpret_cast<const vec4<T>*>(old_positions),
+            reinterpret_cast<vec4<T>*>(velocities),
+            numBodies,
+            deltaTime,
+            damping,
+            numBlocks);
     }
 
     // check if kernel invocation generated an error
@@ -206,6 +214,6 @@ template <typename T> void integrateNbodySystem(const std::array<T*, 2>& positio
 }
 
 // Explicit specializations needed to generate code
-template void integrateNbodySystem<float>(const std::array<float*, 2>& positions, float* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
+template void integrateNbodySystem<float>(float* new_positions, const float* old_positions, float* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
 
-template void integrateNbodySystem<double>(const std::array<double*, 2>& positions, double* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
+template void integrateNbodySystem<double>(double* new_positions, const double* old_positions, double* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
