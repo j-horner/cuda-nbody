@@ -53,8 +53,8 @@ cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params)
-    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), damping_(params.damping) {
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params)
+    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), block_size_(blockSize), damping_(params.damping) {
     _initialize();
 
     setSoftening(params.softening);
@@ -63,8 +63,8 @@ BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int block
 }
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), use_p2p_(useP2P), block_size_(blockSize), host_pos_vec_(std::move(positions)),
+BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), block_size_(blockSize), host_pos_vec_(std::move(positions)),
       host_vel_vec_(std::move(velocities)), damping_(params.damping) {
     assert(host_pos_vec_.size() == nb_bodies_);
     assert(host_vel_vec_.size() == nb_bodies_);

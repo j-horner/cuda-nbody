@@ -114,19 +114,17 @@ ComputeCUDA::ComputeCUDA(
     std::println("> Simulation data stored in {} memory", use_host_mem_ ? "system" : "video");
     std::println("> {} precision floating point simulation", fp64_enabled_ ? "Double" : "Single");
 
-    const auto use_p2p = !use_host_mem_;
-
     if (!positions_fp32.empty()) {
-        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, block_size, use_p2p, params, std::move(positions_fp32), std::move(velocities_fp32));
+        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, block_size, params, std::move(positions_fp32), std::move(velocities_fp32));
 
         if (double_supported_) {
-            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, block_size, use_p2p, params, std::move(positions_fp64), std::move(velocities_fp64));
+            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, block_size, params, std::move(positions_fp64), std::move(velocities_fp64));
         }
     } else {
-        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, block_size, use_p2p, params);
+        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, block_size, params);
 
         if (double_supported_) {
-            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, block_size, use_p2p, params);
+            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, block_size, params);
         }
     }
 

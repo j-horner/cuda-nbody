@@ -45,8 +45,8 @@ template <std::floating_point T> class BodySystemCUDA {
     using Type                    = T;
     constexpr static auto use_cpu = false;
 
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params);
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, bool useP2P, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params);
+    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
@@ -82,10 +82,8 @@ template <std::floating_point T> class BodySystemCUDA {
     std::vector<T> host_pos_vec_ = std::vector(nb_bodies_ * 4, T{0});
     std::vector<T> host_vel_vec_ = std::vector(nb_bodies_ * 4, T{0});
 
-    bool         use_pbo_;
-    bool         use_sys_mem_;
-    bool         use_p2p_;
-    unsigned int sm_version_;
+    bool use_pbo_;
+    bool use_sys_mem_;
 
     T damping_ = 0.995f;
 
