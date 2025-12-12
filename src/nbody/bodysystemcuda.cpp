@@ -53,28 +53,13 @@ cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params)
-    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), block_size_(blockSize), damping_(params.damping) {
-    _initialize();
-
-    setSoftening(params.softening);
-
-    reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
-}
+BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params)
+    : BodySystemCUDA(nb_bodies, blockSize, params, std::vector<T>(nb_bodies * 4, T{0}), std::vector<T>(nb_bodies * 4, T{0})) {}
 
 template <std::floating_point T>
-BodySystemCUDA<T>::BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : nb_bodies_(static_cast<unsigned int>(compute.nb_bodies())), use_pbo_(compute.use_pbo()), use_sys_mem_(compute.use_host_mem()), block_size_(blockSize), host_pos_vec_(std::move(positions)),
-      host_vel_vec_(std::move(velocities)), damping_(params.damping) {
-    assert(host_pos_vec_.size() == nb_bodies_);
-    assert(host_vel_vec_.size() == nb_bodies_);
-
-    _initialize();
-
+BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : nb_bodies_(nb_bodies), block_size_(blockSize), host_pos_vec_(std::move(positions)), host_vel_vec_(std::move(velocities)), damping_(params.damping) {
     setSoftening(params.softening);
-
-    set_position(host_pos_vec_);
-    set_velocity(host_vel_vec_);
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams& params, NBodyConfig config) -> void {
@@ -83,190 +68,285 @@ template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams
     set_velocity(host_vel_vec_);
 }
 
-template <std::floating_point T> auto BodySystemCUDA<T>::_initialize() -> void {
-    const auto memSize = sizeof(T) * 4 * nb_bodies_;
-
-    if (use_sys_mem_) {
-        checkCudaErrors(cudaHostAlloc((void**)&host_pos_[0], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
-        checkCudaErrors(cudaHostAlloc((void**)&host_pos_[1], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
-        checkCudaErrors(cudaHostAlloc((void**)&host_vel_, memSize, cudaHostAllocMapped | cudaHostAllocPortable));
-
-        memset(host_pos_[0], 0, memSize);
-        memset(host_pos_[1], 0, memSize);
-        memset(host_vel_, 0, memSize);
-
-        checkCudaErrors(cudaHostGetDevicePointer((void**)&device_pos_[0], (void*)host_pos_[0], 0));
-        checkCudaErrors(cudaHostGetDevicePointer((void**)&device_pos_[1], (void*)host_pos_[1], 0));
-        checkCudaErrors(cudaHostGetDevicePointer((void**)&device_vel_, (void*)host_vel_, 0));
-    } else {
-        host_pos_[0] = new T[nb_bodies_ * 4];
-        host_vel_    = new T[nb_bodies_ * 4];
-
-        memset(host_pos_[0], 0, memSize);
-        memset(host_vel_, 0, memSize);
-
-        if (use_pbo_) {
-            // create the position pixel buffer objects for rendering
-            // we will actually compute directly from this memory in CUDA too
-            glGenBuffers(2, (GLuint*)pbo_);
-
-            for (int i = 0; i < 2; ++i) {
-                glBindBuffer(GL_ARRAY_BUFFER, pbo_[i]);
-                glBufferData(GL_ARRAY_BUFFER, memSize, host_pos_[0], GL_DYNAMIC_DRAW);
-
-                int size = 0;
-                glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&size);
-
-                if ((unsigned)size != memSize) {
-                    fprintf(stderr, "WARNING: Pixel Buffer Object allocation failed!n");
-                }
-
-                glBindBuffer(GL_ARRAY_BUFFER, 0);
-                checkCudaErrors(cudaGraphicsGLRegisterBuffer(&graphics_resource_[i], pbo_[i], cudaGraphicsMapFlagsNone));
-            }
-        } else {
-            checkCudaErrors(cudaMalloc((void**)&device_pos_[0], memSize));
-            checkCudaErrors(cudaMalloc((void**)&device_pos_[1], memSize));
-        }
-
-        checkCudaErrors(cudaMalloc((void**)&device_vel_, memSize));
-    }
-}
-
-template <std::floating_point T> BodySystemCUDA<T>::~BodySystemCUDA() noexcept {
-    if (use_sys_mem_) {
-        checkCudaErrors(cudaFreeHost(host_pos_[0]));
-        checkCudaErrors(cudaFreeHost(host_pos_[1]));
-        checkCudaErrors(cudaFreeHost(host_vel_));
-
-    } else {
-        delete[] host_pos_[0];
-        delete[] host_pos_[1];
-        delete[] host_vel_;
-
-        checkCudaErrors(cudaFree((void**)device_vel_));
-
-        if (use_pbo_) {
-            checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[0]));
-            checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[1]));
-            glDeleteBuffers(2, (const GLuint*)pbo_);
-        } else {
-            checkCudaErrors(cudaFree((void**)device_pos_[0]));
-            checkCudaErrors(cudaFree((void**)device_pos_[1]));
-        }
-    }
-}
-
-template <std::floating_point T> auto BodySystemCUDA<T>::setSoftening(T softening) -> void {
-    T softeningSq = softening * softening;
-
-    checkCudaErrors(setSofteningSquared(softeningSq));
-}
-
-template <std::floating_point T> auto BodySystemCUDA<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_, device_vel_, graphics_resource_, current_read_, (float)deltaTime, (float)damping_, nb_bodies_, block_size_, use_pbo_);
-
-    std::swap(current_read_, current_write_);
-}
-
 template <std::floating_point T> auto BodySystemCUDA<T>::update_params(const NBodyParams& active_params) -> void {
     setSoftening(active_params.softening);
     damping_ = active_params.damping;
 }
 
-template <std::floating_point T> auto BodySystemCUDA<T>::get_position() const -> std::span<const T> {
-    T* hdata = 0;
-    T* ddata = 0;
+template <std::floating_point T> auto BodySystemCUDA<T>::setSoftening(T softening) -> void {
+    const auto softeningSq = softening * softening;
 
-    cudaGraphicsResource* pgres = NULL;
-
-    int currentReadHost = use_sys_mem_ ? current_read_ : 0;
-
-    hdata = host_pos_[currentReadHost];
-    ddata = device_pos_[current_read_];
-
-    if (use_pbo_) {
-        pgres = graphics_resource_[current_read_];
-    }
-
-    if (!use_sys_mem_) {
-        if (pgres) {
-            checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres, cudaGraphicsMapFlagsReadOnly));
-            checkCudaErrors(cudaGraphicsMapResources(1, &pgres, 0));
-            size_t bytes;
-            checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&ddata, &bytes, pgres));
-        }
-
-        checkCudaErrors(cudaMemcpy(hdata, ddata, nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
-
-        if (pgres) {
-            checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
-        }
-    }
-
-    return {hdata, nb_bodies_ * 4};
-}
-template <std::floating_point T> auto BodySystemCUDA<T>::get_velocity() const -> std::span<const T> {
-    T* hdata = 0;
-    T* ddata = 0;
-
-    cudaGraphicsResource* pgres = NULL;
-
-    hdata = host_vel_;
-    ddata = device_vel_;
-
-    if (!use_sys_mem_) {
-        if (pgres) {
-            checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres, cudaGraphicsMapFlagsReadOnly));
-            checkCudaErrors(cudaGraphicsMapResources(1, &pgres, 0));
-            size_t bytes;
-            checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&ddata, &bytes, pgres));
-        }
-
-        checkCudaErrors(cudaMemcpy(hdata, ddata, nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
-
-        if (pgres) {
-            checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
-        }
-    }
-
-    return {hdata, nb_bodies_ * 4};
+    checkCudaErrors(setSofteningSquared(softeningSq));
 }
 
-template <std::floating_point T> auto BodySystemCUDA<T>::set_position(std::span<const T> data) -> void {
-    current_read_  = 0;
-    current_write_ = 1;
+template <std::floating_point T> BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
+    _initialize();
 
-    if (use_pbo_) {
-        glBindBuffer(GL_ARRAY_BUFFER, pbo_[current_read_]);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(T) * nb_bodies_, data.data());
+    BodySystemCUDADefault<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
+}
+
+template <std::floating_point T>
+BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
+    assert(this->host_pos_vec_.size() == 4 * this->nb_bodies_);
+    assert(this->host_vel_vec_.size() == 4 * this->nb_bodies_);
+
+    _initialize();
+
+    set_position(this->host_pos_vec_);
+    set_velocity(this->host_vel_vec_);
+}
+
+template <std::floating_point T> auto BodySystemCUDADefault<T>::_initialize() -> void {
+    const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
+
+    host_pos_[0] = new T[this->nb_bodies_ * 4];
+    host_vel_    = new T[this->nb_bodies_ * 4];
+
+    memset(host_pos_[0], 0, memSize);
+    memset(host_vel_, 0, memSize);
+
+    checkCudaErrors(cudaMalloc((void**)&device_pos_[0], memSize));
+    checkCudaErrors(cudaMalloc((void**)&device_pos_[1], memSize));
+    checkCudaErrors(cudaMalloc((void**)&device_vel_, memSize));
+}
+
+template <std::floating_point T> BodySystemCUDADefault<T>::~BodySystemCUDADefault() noexcept {
+    delete[] host_pos_[0];
+    delete[] host_pos_[1];
+    delete[] host_vel_;
+
+    checkCudaErrors(cudaFree((void**)device_pos_[0]));
+    checkCudaErrors(cudaFree((void**)device_pos_[1]));
+    checkCudaErrors(cudaFree((void**)device_vel_));
+}
+
+template <std::floating_point T> auto BodySystemCUDADefault<T>::update(T deltaTime) -> void {
+    integrateNbodySystem<T>(device_pos_, device_vel_, nullptr, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_, false);
+
+    std::swap(this->current_read_, this->current_write_);
+}
+
+template <std::floating_point T> auto BodySystemCUDADefault<T>::get_position() const -> std::span<const T> {
+    const auto hdata = host_pos_[0];
+
+    checkCudaErrors(cudaMemcpy(hdata, device_pos_[this->current_read_], this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+
+    return {hdata, this->nb_bodies_ * 4};
+}
+template <std::floating_point T> auto BodySystemCUDADefault<T>::get_velocity() const -> std::span<const T> {
+    checkCudaErrors(cudaMemcpy(host_vel_, device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+
+    return {host_vel_, this->nb_bodies_ * 4};
+}
+
+template <std::floating_point T> auto BodySystemCUDADefault<T>::set_position(std::span<const T> data) -> void {
+    this->current_read_  = 0;
+    this->current_write_ = 1;
+
+    checkCudaErrors(cudaMemcpy(device_pos_[this->current_read_], data.data(), this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
+}
+
+template <std::floating_point T> auto BodySystemCUDADefault<T>::set_velocity(std::span<const T> data) -> void {
+    this->current_read_  = 0;
+    this->current_write_ = 1;
+
+    checkCudaErrors(cudaMemcpy(device_vel_, data.data(), this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
+}
+
+template <std::floating_point T> BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
+    _initialize();
+
+    BodySystemCUDAGraphics<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
+}
+
+template <std::floating_point T>
+BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
+    assert(this->host_pos_vec_.size() == 4 * this->nb_bodies_);
+    assert(this->host_vel_vec_.size() == 4 * this->nb_bodies_);
+
+    _initialize();
+
+    set_position(this->host_pos_vec_);
+    set_velocity(this->host_vel_vec_);
+}
+
+template <std::floating_point T> auto BodySystemCUDAGraphics<T>::_initialize() -> void {
+    const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
+
+    host_pos_[0] = new T[this->nb_bodies_ * 4];
+    host_vel_    = new T[this->nb_bodies_ * 4];
+
+    memset(host_pos_[0], 0, memSize);
+    memset(host_vel_, 0, memSize);
+
+    // create the position pixel buffer objects for rendering
+    // we will actually compute directly from this memory in CUDA too
+    glGenBuffers(2, (GLuint*)pbo_);
+
+    for (int i = 0; i < 2; ++i) {
+        glBindBuffer(GL_ARRAY_BUFFER, pbo_[i]);
+        glBufferData(GL_ARRAY_BUFFER, memSize, host_pos_[0], GL_DYNAMIC_DRAW);
 
         int size = 0;
         glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&size);
 
-        if ((unsigned)size != 4 * (sizeof(T) * nb_bodies_)) {
-            fprintf(stderr, "WARNING: Pixel Buffer Object download failed!n");
+        if ((unsigned)size != memSize) {
+            fprintf(stderr, "WARNING: Pixel Buffer Object allocation failed!n");
         }
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
-    } else {
-        if (use_sys_mem_) {
-            memcpy(host_pos_[current_read_], data.data(), nb_bodies_ * 4 * sizeof(T));
-        } else
-            checkCudaErrors(cudaMemcpy(device_pos_[current_read_], data.data(), nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&graphics_resource_[i], pbo_[i], cudaGraphicsMapFlagsNone));
     }
+
+    checkCudaErrors(cudaMalloc((void**)&device_vel_, memSize));
 }
 
-template <std::floating_point T> auto BodySystemCUDA<T>::set_velocity(std::span<const T> data) -> void {
-    current_read_  = 0;
-    current_write_ = 1;
+template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraphics() noexcept {
+    delete[] host_pos_[0];
+    delete[] host_pos_[1];
+    delete[] host_vel_;
 
-    if (use_sys_mem_) {
-        memcpy(host_vel_, data.data(), nb_bodies_ * 4 * sizeof(T));
-    } else {
-        checkCudaErrors(cudaMemcpy(device_vel_, data.data(), nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaFree((void**)device_vel_));
+
+    checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[0]));
+    checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[1]));
+    glDeleteBuffers(2, (const GLuint*)pbo_);
+}
+
+template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaTime) -> void {
+    integrateNbodySystem<T>(device_pos_, device_vel_, graphics_resource_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_, true);
+
+    std::swap(this->current_read_, this->current_write_);
+}
+
+template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() const -> std::span<const T> {
+    constexpr auto currentReadHost = 0;
+
+    const auto hdata = host_pos_[currentReadHost];
+    const auto ddata = device_pos_[this->current_read_];
+
+    {
+        auto pgres = graphics_resource_[this->current_read_];
+
+        checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres, cudaGraphicsMapFlagsReadOnly));
+        checkCudaErrors(cudaGraphicsMapResources(1, &pgres, 0));
+        size_t bytes;
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&ddata, &bytes, pgres));
+
+        checkCudaErrors(cudaMemcpy(hdata, ddata, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+
+        checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
     }
+
+    return {hdata, this->nb_bodies_ * 4};
+}
+template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_velocity() const -> std::span<const T> {
+    checkCudaErrors(cudaMemcpy(host_vel_, device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+
+    return {host_vel_, this->nb_bodies_ * 4};
+}
+
+template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_position(std::span<const T> data) -> void {
+    this->current_read_  = 0;
+    this->current_write_ = 1;
+
+    glBindBuffer(GL_ARRAY_BUFFER, pbo_[this->current_read_]);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(T) * this->nb_bodies_, data.data());
+
+    int size = 0;
+    glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&size);
+
+    if ((unsigned)size != 4 * (sizeof(T) * this->nb_bodies_)) {
+        fprintf(stderr, "WARNING: Pixel Buffer Object download failed!n");
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_velocity(std::span<const T> data) -> void {
+    this->current_read_  = 0;
+    this->current_write_ = 1;
+
+    checkCudaErrors(cudaMemcpy(device_vel_, data.data(), this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
+}
+
+template <std::floating_point T> BodySystemCUDAHostMemory<T>::BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
+    _initialize();
+
+    BodySystemCUDAHostMemory<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
+}
+
+template <std::floating_point T>
+BodySystemCUDAHostMemory<T>::BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
+    : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
+    assert(this->host_pos_vec_.size() == 4 * this->nb_bodies_);
+    assert(this->host_vel_vec_.size() == 4 * this->nb_bodies_);
+
+    _initialize();
+
+    set_position(this->host_pos_vec_);
+    set_velocity(this->host_vel_vec_);
+}
+
+template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::_initialize() -> void {
+    const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
+
+    checkCudaErrors(cudaHostAlloc((void**)&host_pos_[0], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
+    checkCudaErrors(cudaHostAlloc((void**)&host_pos_[1], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
+    checkCudaErrors(cudaHostAlloc((void**)&host_vel_, memSize, cudaHostAllocMapped | cudaHostAllocPortable));
+
+    memset(host_pos_[0], 0, memSize);
+    memset(host_pos_[1], 0, memSize);
+    memset(host_vel_, 0, memSize);
+
+    checkCudaErrors(cudaHostGetDevicePointer((void**)&device_pos_[0], (void*)host_pos_[0], 0));
+    checkCudaErrors(cudaHostGetDevicePointer((void**)&device_pos_[1], (void*)host_pos_[1], 0));
+    checkCudaErrors(cudaHostGetDevicePointer((void**)&device_vel_, (void*)host_vel_, 0));
+}
+
+template <std::floating_point T> BodySystemCUDAHostMemory<T>::~BodySystemCUDAHostMemory() noexcept {
+    checkCudaErrors(cudaFreeHost(host_pos_[0]));
+    checkCudaErrors(cudaFreeHost(host_pos_[1]));
+    checkCudaErrors(cudaFreeHost(host_vel_));
+}
+
+template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::update(T deltaTime) -> void {
+    integrateNbodySystem<T>(device_pos_, device_vel_, nullptr, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_, false);
+
+    std::swap(this->current_read_, this->current_write_);
+}
+
+template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::get_position() const -> std::span<const T> {
+    return {host_pos_[this->current_read_], this->nb_bodies_ * 4};
+}
+template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::get_velocity() const -> std::span<const T> {
+    return {host_vel_, this->nb_bodies_ * 4};
+}
+
+template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_position(std::span<const T> data) -> void {
+    this->current_read_  = 0;
+    this->current_write_ = 1;
+
+    memcpy(host_pos_[this->current_read_], data.data(), this->nb_bodies_ * 4 * sizeof(T));
+}
+
+template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_velocity(std::span<const T> data) -> void {
+    this->current_read_  = 0;
+    this->current_write_ = 1;
+
+    memcpy(host_vel_, data.data(), this->nb_bodies_ * 4 * sizeof(T));
 }
 
 template BodySystemCUDA<float>;
 template BodySystemCUDA<double>;
+
+template BodySystemCUDADefault<float>;
+template BodySystemCUDADefault<double>;
+
+template BodySystemCUDAGraphics<float>;
+template BodySystemCUDAGraphics<double>;
+
+template BodySystemCUDAHostMemory<float>;
+template BodySystemCUDAHostMemory<double>;

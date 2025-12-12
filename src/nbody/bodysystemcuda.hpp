@@ -36,40 +36,101 @@
 #include <span>
 #include <vector>
 
-class ComputeCUDA;
 struct NBodyParams;
 
-// CUDA BodySystem: runs on the GPU
 template <std::floating_point T> class BodySystemCUDA {
  public:
     using Type                    = T;
     constexpr static auto use_cpu = false;
 
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params);
-    BodySystemCUDA(const ComputeCUDA& compute, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
+    BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+
+    auto virtual getCurrentReadBuffer() const noexcept -> unsigned int { return 0u; }
+
+    auto virtual get_position() const -> std::span<const T> = 0;
+    auto virtual get_velocity() const -> std::span<const T> = 0;
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
-    auto update(T deltaTime) -> void;
+    auto virtual update(T deltaTime) -> void = 0;
 
     auto update_params(const NBodyParams& active_params) -> void;
 
-    auto get_position() const -> std::span<const T>;
-    auto get_velocity() const -> std::span<const T>;
+    auto virtual set_position(std::span<const T> data) -> void = 0;
+    auto virtual set_velocity(std::span<const T> data) -> void = 0;
 
-    auto set_position(std::span<const T> data) -> void;
-    auto set_velocity(std::span<const T> data) -> void;
+    virtual ~BodySystemCUDA() = default;
 
-    auto getCurrentReadBuffer() const noexcept { return pbo_[current_read_]; }
+ protected:
+    unsigned int nb_bodies_;
 
-    ~BodySystemCUDA() noexcept;
+    std::vector<T> host_pos_vec_;
+    std::vector<T> host_vel_vec_;
 
- private:    // methods
+    T damping_ = 0.995f;
+
+    unsigned int current_read_  = 0u;
+    unsigned int current_write_ = 1u;
+
+    unsigned int block_size_;
+
+ private:
     auto setSoftening(T softening) -> void;
+};
 
+///
+/// @brief  The default CUDA implementation. No graphics interop, no host memory.
+///
+template <std::floating_point T> class BodySystemCUDADefault : public BodySystemCUDA<T> {
+ public:
+    BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
+    BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+
+    auto update(T deltaTime) -> void final;
+
+    auto get_position() const -> std::span<const T> final;
+    auto get_velocity() const -> std::span<const T> final;
+
+    auto set_position(std::span<const T> data) -> void final;
+    auto set_velocity(std::span<const T> data) -> void final;
+
+    ~BodySystemCUDADefault() noexcept;
+
+ private:
     auto _initialize() -> void;
 
-    unsigned int nb_bodies_;
+    // Host data
+    std::array<T*, 2> host_pos_{nullptr, nullptr};
+    T*                host_vel_ = nullptr;
+
+    // Device data
+    std::array<T*, 2> device_pos_{nullptr, nullptr};
+    T*                device_vel_ = nullptr;
+};
+
+///
+/// @brief  The CUDA implementation using OpenGL interop. Some GPU buffers are allocated by OpenGL.
+///
+template <std::floating_point T> class BodySystemCUDAGraphics : public BodySystemCUDA<T> {
+ public:
+    BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
+    BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+
+    auto update(T deltaTime) -> void final;
+
+    auto get_position() const -> std::span<const T> final;
+    auto get_velocity() const -> std::span<const T> final;
+
+    auto set_position(std::span<const T> data) -> void final;
+    auto set_velocity(std::span<const T> data) -> void final;
+
+    auto getCurrentReadBuffer() const noexcept -> unsigned int final { return pbo_[BodySystemCUDA<T>::current_read_]; }
+
+    ~BodySystemCUDAGraphics() noexcept;
+
+ private:
+    auto _initialize() -> void;
 
     // Host data
     std::array<T*, 2> host_pos_{nullptr, nullptr};
@@ -79,21 +140,48 @@ template <std::floating_point T> class BodySystemCUDA {
     std::array<T*, 2> device_pos_{nullptr, nullptr};
     T*                device_vel_ = nullptr;
 
-    std::vector<T> host_pos_vec_ = std::vector(nb_bodies_ * 4, T{0});
-    std::vector<T> host_vel_vec_ = std::vector(nb_bodies_ * 4, T{0});
-
-    bool use_pbo_;
-    bool use_sys_mem_;
-
-    T damping_ = 0.995f;
-
     unsigned int          pbo_[2];
     cudaGraphicsResource* graphics_resource_[2];
-    unsigned int          current_read_  = 0u;
-    unsigned int          current_write_ = 1u;
+};
 
-    unsigned int block_size_;
+///
+/// @brief The CUDA implementation with host memory mapped to device memory.
+///
+template <std::floating_point T> class BodySystemCUDAHostMemory : public BodySystemCUDA<T> {
+ public:
+    BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
+    BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+
+    auto update(T deltaTime) -> void final;
+
+    auto get_position() const -> std::span<const T> final;
+    auto get_velocity() const -> std::span<const T> final;
+
+    auto set_position(std::span<const T> data) -> void final;
+    auto set_velocity(std::span<const T> data) -> void final;
+
+    ~BodySystemCUDAHostMemory() noexcept;
+
+ private:
+    auto _initialize() -> void;
+
+    // Host data
+    std::array<T*, 2> host_pos_{nullptr, nullptr};
+    T*                host_vel_ = nullptr;
+
+    // Device data
+    std::array<T*, 2> device_pos_{nullptr, nullptr};
+    T*                device_vel_ = nullptr;
 };
 
 extern template BodySystemCUDA<float>;
 extern template BodySystemCUDA<double>;
+
+extern template BodySystemCUDADefault<float>;
+extern template BodySystemCUDADefault<double>;
+
+extern template BodySystemCUDAGraphics<float>;
+extern template BodySystemCUDAGraphics<double>;
+
+extern template BodySystemCUDAHostMemory<float>;
+extern template BodySystemCUDAHostMemory<double>;
