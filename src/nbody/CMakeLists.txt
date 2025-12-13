@@ -10,7 +10,7 @@ add_library(${PROJECT_NAME}_param STATIC param.cpp)
 add_library(${PROJECT_NAME}_params STATIC params.cpp)
 
 add_library(${PROJECT_NAME}_randomise_bodies STATIC randomise_bodies.cpp)
-add_library(${PROJECT_NAME}_bodysystemcuda STATIC bodysystemcuda.cu bodysystemcuda.cpp)
+add_library(${PROJECT_NAME}_bodysystemcuda STATIC bodysystemcuda.cu bodysystemcuda.cpp bodysystemcuda_default.cu)
 add_library(${PROJECT_NAME}_bodysystemcpu STATIC bodysystemcpu.cpp)
 
 add_library(${PROJECT_NAME}_compute STATIC compute.cpp)

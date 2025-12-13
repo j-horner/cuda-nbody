@@ -33,6 +33,7 @@
 #include <cooperative_groups.h>
 #include <cuda_runtime.h>
 
+#include <concepts>
 #include <span>
 
 #include <cmath>
@@ -50,7 +51,7 @@ cudaError_t setSofteningSquared(double softeningSq) {
     return cudaMemcpyToSymbol(softeningSquared_fp64, &softeningSq, sizeof(double), 0, cudaMemcpyHostToDevice);
 }
 
-template <class T> struct SharedMemory {
+template <typename T> struct SharedMemory {
     __device__ inline operator T*() {
         extern __shared__ int __smem[];
         return (T*)__smem;
@@ -62,7 +63,7 @@ template <class T> struct SharedMemory {
     }
 };
 
-template <typename T> __device__ T rsqrt_T(T x) {
+template <std::floating_point T> __device__ T rsqrt_T(T x) {
     return rsqrt(x);
 }
 
@@ -79,7 +80,7 @@ template <> __device__ double rsqrt_T<double>(double x) {
 // This macro is only used when multithreadBodies is true (below)
 #define SX_SUM(i, j) sharedPos[i + blockDim.x * j]
 
-template <typename T> __device__ T getSofteningSquared() {
+template <std::floating_point T> __device__ T getSofteningSquared() {
     return softeningSquared;
 }
 template <> __device__ double getSofteningSquared<double>() {
@@ -94,7 +95,7 @@ template <> __device__ double getSofteningSquared<double>() {
     unsigned int nb_bodies;
 };*/
 
-template <typename T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
+template <std::floating_point T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
     vec3<T> r;
 
     // r_ij  [3 FLOPS]
@@ -121,7 +122,7 @@ template <typename T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T>
     return ai;
 }
 
-template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, const vec4<T>* positions, int numTiles, cg::thread_block cta) {
+template <std::floating_point T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, const vec4<T>* positions, int numTiles, cg::thread_block cta) {
     vec4<T>* sharedPos = SharedMemory<vec4<T>>();
 
     vec3<T> acc = {0.0f, 0.0f, 0.0f};
@@ -144,7 +145,7 @@ template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, const
     return acc;
 }
 
-template <typename T> __global__ void integrateBodies(vec4<T>* __restrict__ newPos, const vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceNumBodies, float deltaTime, float damping, int numTiles) {
+template <std::floating_point T> __global__ void integrateBodies(vec4<T>* __restrict__ newPos, const vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceNumBodies, T deltaTime, T damping, int numTiles) {
     // Handle to thread block group
     cg::thread_block cta   = cg::this_thread_block();
     int              index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -182,7 +183,7 @@ template <typename T> __global__ void integrateBodies(vec4<T>* __restrict__ newP
     vel[index]    = velocity;
 }
 
-template <typename T> void integrateNbodySystem(T* new_positions, const T* old_positions, T* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize) {
+template <std::floating_point T> void integrateNbodySystem(T* new_positions, const T* old_positions, T* velocities, unsigned int currentRead, T deltaTime, T damping, unsigned int numBodies, int blockSize) {
     {
         const auto numBlocks     = (numBodies + blockSize - 1) / blockSize;
         const auto sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
@@ -216,4 +217,4 @@ template <typename T> void integrateNbodySystem(T* new_positions, const T* old_p
 // Explicit specializations needed to generate code
 template void integrateNbodySystem<float>(float* new_positions, const float* old_positions, float* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
 
-template void integrateNbodySystem<double>(double* new_positions, const double* old_positions, double* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
+template void integrateNbodySystem<double>(double* new_positions, const double* old_positions, double* velocities, unsigned int currentRead, double deltaTime, double damping, unsigned int numBodies, int blockSize);

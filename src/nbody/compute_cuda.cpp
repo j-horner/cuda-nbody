@@ -2,6 +2,7 @@
 
 #include "bodysystemcpu.hpp"
 #include "bodysystemcuda.hpp"
+#include "bodysystemcuda_default.hpp"
 #include "helper_cuda.hpp"
 #include "interface.hpp"
 

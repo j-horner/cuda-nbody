@@ -32,6 +32,7 @@
 #include "compute_cuda.hpp"
 #include "gl_includes.hpp"
 #include "helper_cuda.hpp"
+#include "integrate_nbody_cuda.hpp"
 #include "params.hpp"
 #include "randomise_bodies.hpp"
 #include "vec.hpp"
@@ -45,8 +46,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-
-template <typename T> void integrateNbodySystem(T* new_positions, const T* old_positions, T* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
 
 cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
@@ -76,72 +75,6 @@ template <std::floating_point T> auto BodySystemCUDA<T>::setSoftening(T softenin
     const auto softeningSq = softening * softening;
 
     checkCudaErrors(setSofteningSquared(softeningSq));
-}
-
-template <std::floating_point T> BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
-    _initialize();
-
-    BodySystemCUDADefault<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
-}
-
-template <std::floating_point T>
-BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
-    assert(this->host_pos_vec_.size() == 4 * this->nb_bodies_);
-    assert(this->host_vel_vec_.size() == 4 * this->nb_bodies_);
-
-    _initialize();
-
-    set_position(this->host_pos_vec_);
-    set_velocity(this->host_vel_vec_);
-}
-
-template <std::floating_point T> auto BodySystemCUDADefault<T>::_initialize() -> void {
-    host_pos_.resize(this->nb_bodies_ * 4, 0);
-    host_vel_.resize(this->nb_bodies_ * 4, 0);
-
-    const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
-
-    checkCudaErrors(cudaMalloc((void**)&device_pos_[0], memSize));
-    checkCudaErrors(cudaMalloc((void**)&device_pos_[1], memSize));
-    checkCudaErrors(cudaMalloc((void**)&device_vel_, memSize));
-}
-
-template <std::floating_point T> BodySystemCUDADefault<T>::~BodySystemCUDADefault() noexcept {
-    checkCudaErrors(cudaFree((void**)device_pos_[0]));
-    checkCudaErrors(cudaFree((void**)device_pos_[1]));
-    checkCudaErrors(cudaFree((void**)device_vel_));
-}
-
-template <std::floating_point T> auto BodySystemCUDADefault<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_);
-
-    std::swap(this->current_read_, this->current_write_);
-}
-
-template <std::floating_point T> auto BodySystemCUDADefault<T>::get_position() const -> std::span<const T> {
-    checkCudaErrors(cudaMemcpy(host_pos_.data(), device_pos_[this->current_read_], this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
-
-    return host_pos_;
-}
-template <std::floating_point T> auto BodySystemCUDADefault<T>::get_velocity() const -> std::span<const T> {
-    checkCudaErrors(cudaMemcpy(host_vel_.data(), device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
-
-    return host_vel_;
-}
-
-template <std::floating_point T> auto BodySystemCUDADefault<T>::set_position(std::span<const T> data) -> void {
-    this->current_read_  = 0;
-    this->current_write_ = 1;
-
-    checkCudaErrors(cudaMemcpy(device_pos_[this->current_read_], data.data(), this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
-}
-
-template <std::floating_point T> auto BodySystemCUDADefault<T>::set_velocity(std::span<const T> data) -> void {
-    this->current_read_  = 0;
-    this->current_write_ = 1;
-
-    checkCudaErrors(cudaMemcpy(device_vel_, data.data(), this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
 }
 
 template <std::floating_point T> BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
@@ -206,7 +139,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaT
     checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[this->current_read_]), &bytes, graphics_resource_[this->current_read_]));
     checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[1 - this->current_read_]), &bytes, graphics_resource_[1 - this->current_read_]));
 
-    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_);
+    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_, this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
 
     checkCudaErrors(cudaGraphicsUnmapResources(2, graphics_resource_, 0));
 
@@ -302,7 +235,7 @@ template <std::floating_point T> BodySystemCUDAHostMemory<T>::~BodySystemCUDAHos
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_, this->current_read_, (float)deltaTime, (float)this->damping_, this->nb_bodies_, this->block_size_);
+    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_, this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
 
     std::swap(this->current_read_, this->current_write_);
 }
@@ -330,9 +263,6 @@ template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_velocity(
 
 template BodySystemCUDA<float>;
 template BodySystemCUDA<double>;
-
-template BodySystemCUDADefault<float>;
-template BodySystemCUDADefault<double>;
 
 template BodySystemCUDAGraphics<float>;
 template BodySystemCUDAGraphics<double>;
