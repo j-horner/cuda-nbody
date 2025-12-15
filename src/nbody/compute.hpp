@@ -14,19 +14,17 @@ class Camera;
 class Interface;
 class ParamListGL;
 
-class ComputeConfig {
+class Compute {
  public:
-    ComputeConfig(bool                         enable_fp64,
-                  bool                         enable_cycle_demo,
-                  bool                         enable_cpu,
-                  bool                         enable_compare_to_cpu,
-                  bool                         enable_benchmark,
-                  bool                         enable_host_memory,
-                  int                          device,
-                  std::size_t                  nb_requested_devices,
-                  std::size_t                  block_size,
-                  std::size_t                  nb_bodies,
-                  const std::filesystem::path& tipsy_file);
+    Compute(bool                         enable_fp64,
+            bool                         enable_cycle_demo,
+            bool                         enable_cpu,
+            bool                         enable_compare_to_cpu,
+            bool                         enable_benchmark,
+            bool                         enable_host_memory,
+            int                          block_size,
+            std::size_t                  nb_bodies,
+            const std::filesystem::path& tipsy_file);
 
     auto nb_bodies() const noexcept { return num_bodies_; }
 
@@ -68,16 +66,20 @@ class ComputeConfig {
 
     auto calculate_fps(int frame_count) -> void;
 
-    ~ComputeConfig() noexcept;
+    ~Compute() noexcept;
 
  private:
+    using Clock        = std::chrono::steady_clock;
+    using TimePoint    = std::chrono::time_point<Clock>;
+    using Milliseconds = std::chrono::duration<float, std::milli>;
+
     auto print_benchmark_results(int nb_iterations, float milliseconds) -> void;
 
     auto select_demo(Camera& camera) -> void;
 
     constexpr auto compute_perf_stats(float frequency) -> void;
 
-    auto get_milliseconds_passed() -> float;
+    auto get_milliseconds_passed() -> Milliseconds;
 
     constexpr static auto demo_params = std::array{
         NBodyParams{0.016f, 1.54f, 8.0f, 0.1f, 1.0f, 0, -2, -100},
@@ -114,9 +116,6 @@ class ComputeConfig {
 
     TipsyData<float>  tipsy_data_fp32_;
     TipsyData<double> tipsy_data_fp64_;
-
-    using Clock     = std::chrono::steady_clock;
-    using TimePoint = std::chrono::time_point<Clock>;
 
     TimePoint demo_reset_time_;
 };

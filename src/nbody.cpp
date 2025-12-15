@@ -158,14 +158,12 @@ struct Options {
     bool                  hostmem    = false;
     bool                  benchmark  = false;
     std::size_t           numbodies  = 0;
-    int                   device     = -1;
-    std::size_t           numdevices = 0;
     bool                  compare    = false;
     bool                  qatest     = false;
     bool                  cpu        = false;
     std::filesystem::path tipsy;
-    std::size_t           i          = 0;
-    std::size_t           block_size = 0;
+    std::size_t           iterations = 0;
+    int                   block_size = 0;
 };
 
 auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
@@ -180,13 +178,11 @@ auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
     app.add_flag("--hostmem", options.hostmem, "Stores simulation data in host memory");
     app.add_flag("--benchmark", options.benchmark, "Run benchmark to measure performance");
     app.add_option("--numbodies", options.numbodies, "Number of bodies (>= 1) to run in simulation")->check(CLI::Range(std::size_t{1u}, std::numeric_limits<std::size_t>::max()));
-    const auto device_opt = app.add_option("--device", options.device, "The CUDA device to use")->check(CLI::Range(0, std::numeric_limits<int>::max()));
-    app.add_option("--numdevices", options.numdevices, "Number of CUDA devices (> 0) to use for simulation")->check(CLI::Range(std::size_t{1u}, std::numeric_limits<std::size_t>::max()))->excludes(device_opt);
     app.add_flag("--compare", options.compare, "Compares simulation results running once on the default GPU and once on the CPU");
     app.add_flag("--qatest", options.qatest, "Runs a QA test");
     app.add_flag("--cpu", options.cpu, "Run n-body simulation on the CPU");
     app.add_option("--tipsy", options.tipsy, "Load a tipsy model file for simulation")->check(CLI::ExistingFile);
-    app.add_option("-i,--iterations", options.i, "Number of iterations to run in the benchmark")->default_val(10);
+    app.add_option("-i,--iterations", options.iterations, "Number of iterations to run in the benchmark")->default_val(10);
     app.add_option("--blockSize", options.block_size, "The CUDA kernel block size")->default_val(256);
 
     // cppcheck-suppress unmatchedSuppression
@@ -262,28 +258,17 @@ auto main(int argc, char** argv) -> int {
         show_sliders    = tipsy_file.empty();
 
         // Initialize GL and GLUT if necessary
-        // TODO: graphics stuf is curently setup inside ComputeConfig so this needs to be invoked first
+        // TODO: graphics stuf is currently setup inside Compute so this needs to be invoked first
         if ((!cmd_options.compare) && (!cmd_options.benchmark) && (!cmd_options.qatest)) {
             initGL(&argc, argv, full_screen);
         }
 
         const auto compare_to_cpu = (cmd_options.compare || cmd_options.qatest) && (!cmd_options.cpu);
 
-        auto compute = ComputeConfig(
-            cmd_options.fp64,
-            cycle_demo,
-            cmd_options.cpu,
-            compare_to_cpu,
-            cmd_options.benchmark,
-            cmd_options.hostmem,
-            cmd_options.device,
-            cmd_options.numdevices,
-            cmd_options.block_size,
-            cmd_options.numbodies,
-            tipsy_file);
+        auto compute = Compute(cmd_options.fp64, cycle_demo, cmd_options.cpu, compare_to_cpu, cmd_options.benchmark, cmd_options.hostmem, cmd_options.block_size, cmd_options.numbodies, tipsy_file);
 
         if (cmd_options.benchmark) {
-            const auto nb_iterations = cmd_options.i == 0 ? 10 : static_cast<int>(cmd_options.i);
+            const auto nb_iterations = cmd_options.iterations == 0 ? 10 : static_cast<int>(cmd_options.iterations);
             compute.run_benchmark(nb_iterations);
             return 0;
         }

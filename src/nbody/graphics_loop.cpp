@@ -58,7 +58,7 @@ template <auto GLUTFunction, typename F> auto register_callback(F& func) -> void
     RegisterCallback<GLUTFunction, Args>::register_callback(func);
 }
 
-auto execute_graphics_loop(ComputeConfig& compute, Interface& interface, Camera& camera, Controls& controls) -> void {
+auto execute_graphics_loop(Compute& compute, Interface& interface, Camera& camera, Controls& controls) -> void {
     auto display_ = [&]() { interface.display(compute, camera); };
 
     auto reshape_ = [](int w, int h) {

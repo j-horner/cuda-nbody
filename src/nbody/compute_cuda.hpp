@@ -2,8 +2,9 @@
 
 #include "nbody_config.hpp"
 
-#include <cuda_runtime.h>
+#include <cuda/api/event.hpp>
 
+#include <chrono>
 #include <concepts>
 #include <memory>
 #include <span>
@@ -13,15 +14,17 @@ struct NBodyParams;
 class Interface;
 template <std::floating_point T> class BodySystemCUDA;
 
+namespace cuda {
+class device_t;
+}    // namespace cuda
+
 class ComputeCUDA {
  public:
-    ComputeCUDA(std::size_t nb_requested_devices, bool enable_host_mem, bool use_pbo, int device, std::size_t block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
+    ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
 
-    ComputeCUDA(std::size_t         nb_requested_devices,
-                bool                enable_host_mem,
+    ComputeCUDA(bool                enable_host_mem,
                 bool                use_pbo,
-                int                 device,
-                std::size_t         block_size,
+                int                 block_size,
                 double              fp64_enabled,
                 std::size_t         num_bodies,
                 const NBodyParams&  params,
@@ -34,9 +37,12 @@ class ComputeCUDA {
     auto use_pbo() const noexcept { return use_pbo_; }
     auto use_host_mem() const noexcept { return use_host_mem_; }
 
-    auto switch_precision() -> void;
+    auto get_position_fp32() const noexcept -> std::span<const float>;
+    auto get_position_fp64() const noexcept -> std::span<const double>;
 
-    auto run_benchmark(int nb_iterations, float dt) -> float;
+    auto display(Interface& interface) const -> void;
+
+    auto switch_precision() -> void;
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
@@ -45,23 +51,22 @@ class ComputeCUDA {
 
     auto update(float dt) -> void;
 
-    auto get_position_fp32() const noexcept -> std::span<const float>;
-    auto get_position_fp64() const noexcept -> std::span<const double>;
-
     auto update_params(const NBodyParams& params) -> void;
 
-    auto get_milliseconds_passed() -> float;
-
-    auto display(Interface& interface) const -> void;
-
     auto compare_results(const NBodyParams& params) -> bool;
+
+    using Milliseconds = std::chrono::duration<float, std::milli>;
+
+    auto get_milliseconds_passed() -> Milliseconds;
+
+    auto run_benchmark(int nb_iterations, float dt) -> Milliseconds;
 
     ~ComputeCUDA() noexcept;
 
  private:
     template <std::floating_point TNew, std::floating_point TOld> auto switch_precision(BodySystemCUDA<TNew>& new_nbody, const BodySystemCUDA<TOld>& old_nbody) -> void;
 
-    template <std::floating_point T> auto run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> float;
+    template <std::floating_point T> auto run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> Milliseconds;
 
     template <std::floating_point T> auto compare_results(const NBodyParams& params, BodySystemCUDA<T>& nbodyCuda) const -> bool;
 
@@ -77,7 +82,7 @@ class ComputeCUDA {
     std::unique_ptr<BodySystemCUDA<float>>  nbody_fp32_;
     std::unique_ptr<BodySystemCUDA<double>> nbody_fp64_;
 
-    cudaEvent_t host_mem_sync_event_{};
-    cudaEvent_t start_event_{};
-    cudaEvent_t stop_event_{};
+    cuda::event_t host_mem_sync_event_;
+    cuda::event_t start_event_;
+    cuda::event_t stop_event_;
 };

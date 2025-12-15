@@ -28,14 +28,12 @@
 #include "helper_cuda.hpp"
 #include "vec.hpp"
 
-// needed before <cuda_gl_interop.h> apparently...
-#include <GL/freeglut.h>
-
 // CUDA standard includes
+
 #include <cooperative_groups.h>
-#include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 
+#include <concepts>
 #include <span>
 
 #include <cmath>
@@ -53,7 +51,7 @@ cudaError_t setSofteningSquared(double softeningSq) {
     return cudaMemcpyToSymbol(softeningSquared_fp64, &softeningSq, sizeof(double), 0, cudaMemcpyHostToDevice);
 }
 
-template <class T> struct SharedMemory {
+template <typename T> struct SharedMemory {
     __device__ inline operator T*() {
         extern __shared__ int __smem[];
         return (T*)__smem;
@@ -65,7 +63,7 @@ template <class T> struct SharedMemory {
     }
 };
 
-template <typename T> __device__ T rsqrt_T(T x) {
+template <std::floating_point T> __device__ T rsqrt_T(T x) {
     return rsqrt(x);
 }
 
@@ -82,22 +80,22 @@ template <> __device__ double rsqrt_T<double>(double x) {
 // This macro is only used when multithreadBodies is true (below)
 #define SX_SUM(i, j) sharedPos[i + blockDim.x * j]
 
-template <typename T> __device__ T getSofteningSquared() {
+template <std::floating_point T> __device__ T getSofteningSquared() {
     return softeningSquared;
 }
 template <> __device__ double getSofteningSquared<double>() {
     return softeningSquared_fp64;
 }
 
-template <typename T> struct DeviceData {
+/* template <typename T> struct DeviceData {
     T*           pos[2];    // mapped host pointers
     T*           vel;
     cudaEvent_t  event;
     unsigned int offset;
     unsigned int nb_bodies;
-};
+};*/
 
-template <typename T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
+template <std::floating_point T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
     vec3<T> r;
 
     // r_ij  [3 FLOPS]
@@ -124,7 +122,7 @@ template <typename T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T>
     return ai;
 }
 
-template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, vec4<T>* positions, int numTiles, cg::thread_block cta) {
+template <std::floating_point T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, const vec4<T>* positions, int numTiles, cg::thread_block cta) {
     vec4<T>* sharedPos = SharedMemory<vec4<T>>();
 
     vec3<T> acc = {0.0f, 0.0f, 0.0f};
@@ -147,8 +145,7 @@ template <typename T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, vec4<
     return acc;
 }
 
-template <typename T>
-__global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceOffset, unsigned int deviceNumBodies, float deltaTime, float damping, int numTiles) {
+template <std::floating_point T> __global__ void integrateBodies(vec4<T>* __restrict__ newPos, const vec4<T>* __restrict__ oldPos, vec4<T>* vel, unsigned int deviceNumBodies, T deltaTime, T damping, int numTiles) {
     // Handle to thread block group
     cg::thread_block cta   = cg::this_thread_block();
     int              index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -157,7 +154,7 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
         return;
     }
 
-    vec4<T> position = oldPos[deviceOffset + index];
+    vec4<T> position = oldPos[index];
 
     vec3<T> accel = computeBodyAccel<T>(position, oldPos, numTiles, cta);
 
@@ -166,7 +163,7 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
     // note we factor out the body's mass from the equation, here and in
     // bodyBodyInteraction
     // (because they cancel out).  Thus here force == acceleration
-    vec4<T> velocity = vel[deviceOffset + index];
+    vec4<T> velocity = vel[index];
 
     velocity.x += accel.x * deltaTime;
     velocity.y += accel.y * deltaTime;
@@ -182,73 +179,42 @@ __global__ void integrateBodies(vec4<T>* __restrict__ newPos, vec4<T>* __restric
     position.z += velocity.z * deltaTime;
 
     // store new position and velocity
-    newPos[deviceOffset + index] = position;
-    vel[deviceOffset + index]    = velocity;
+    newPos[index] = position;
+    vel[index]    = velocity;
 }
 
-template <typename T>
-void integrateNbodySystem(
-    std::span<DeviceData<T>> deviceData,
-    cudaGraphicsResource**   pgres,
-    unsigned int             currentRead,
-    float                    deltaTime,
-    float                    damping,
-    unsigned int             numBodies,
-    unsigned int             numDevices,
-    int                      blockSize,
-    bool                     bUsePBO) {
-    if (bUsePBO) {
-        checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[currentRead], cudaGraphicsMapFlagsReadOnly));
-        checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres[1 - currentRead], cudaGraphicsMapFlagsWriteDiscard));
-        checkCudaErrors(cudaGraphicsMapResources(2, pgres, 0));
-        size_t bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].pos[currentRead]), &bytes, pgres[currentRead]));
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(deviceData[0].pos[1 - currentRead]), &bytes, pgres[1 - currentRead]));
-    }
-
-    for (unsigned int dev = 0; dev != numDevices; dev++) {
-        if (numDevices > 1) {
-            cudaSetDevice(dev);
-        }
-
-        int numBlocks     = (deviceData[dev].nb_bodies + blockSize - 1) / blockSize;
-        int numTiles      = (numBodies + blockSize - 1) / blockSize;
-        int sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
+template <std::floating_point T> void integrateNbodySystem(T* new_positions, const T* old_positions, T* velocities, unsigned int currentRead, T deltaTime, T damping, unsigned int numBodies, int blockSize) {
+    {
+        const auto numBlocks     = (numBodies + blockSize - 1) / blockSize;
+        const auto sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
 
         integrateBodies<T><<<numBlocks, blockSize, sharedMemSize>>>(
-            (vec4<T>*)deviceData[dev].pos[1 - currentRead],
-            (vec4<T>*)deviceData[dev].pos[currentRead],
-            (vec4<T>*)deviceData[dev].vel,
-            deviceData[dev].offset,
-            deviceData[dev].nb_bodies,
+            reinterpret_cast<vec4<T>*>(new_positions),
+            reinterpret_cast<const vec4<T>*>(old_positions),
+            reinterpret_cast<vec4<T>*>(velocities),
+            numBodies,
             deltaTime,
             damping,
-            numTiles);
-
-        if (numDevices > 1) {
-            checkCudaErrors(cudaEventRecord(deviceData[dev].event));
-            // MJH: Hack on older driver versions to force kernel launches to flush!
-            cudaStreamQuery(0);
-        }
-
-        // check if kernel invocation generated an error
-        getLastCudaError("Kernel execution failed");
+            numBlocks);
     }
 
-    if (numDevices > 1) {
-        for (unsigned int dev = 0; dev < numDevices; dev++) {
-            checkCudaErrors(cudaEventSynchronize(deviceData[dev].event));
-        }
-    }
+    // check if kernel invocation generated an error
+    const auto err = cudaGetLastError();
 
-    if (bUsePBO) {
-        checkCudaErrors(cudaGraphicsUnmapResources(2, pgres, 0));
+    if (cudaSuccess != err) {
+        fprintf(stderr,
+                "%s(%i) : getLastCudaError() CUDA error :"
+                " %s : (%d) %s.\n",
+                __FILE__,
+                __LINE__,
+                "Kernel execution failed",
+                static_cast<int>(err),
+                cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
     }
 }
 
 // Explicit specializations needed to generate code
-template void integrateNbodySystem<
-    float>(std::span<DeviceData<float>> deviceData, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, unsigned int numDevices, int blockSize, bool bUsePBO);
+template void integrateNbodySystem<float>(float* new_positions, const float* old_positions, float* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
 
-template void integrateNbodySystem<
-    double>(std::span<DeviceData<double>> deviceData, cudaGraphicsResource** pgres, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, unsigned int numDevices, int blockSize, bool bUsePBO);
+template void integrateNbodySystem<double>(double* new_positions, const double* old_positions, double* velocities, unsigned int currentRead, double deltaTime, double damping, unsigned int numBodies, int blockSize);

@@ -4,13 +4,13 @@
 #include "compute.hpp"
 #include "gl_includes.hpp"
 #include "gl_print.hpp"
-#include "helper_cuda.hpp"
 #include "param.hpp"
 #include "paramgl.hpp"
 #include "render_particles.hpp"
 #include "win_coords.hpp"
 
 #include <GL/freeglut.h>
+#include <cuda/api/device.hpp>
 
 #include <format>
 #include <memory>
@@ -20,7 +20,7 @@ Interface::Interface(bool display_sliders, ParamListGL parameters, bool enable_f
     param_list_.add_param(std::make_unique<Param<float>>("Point Size", point_size_, 0.001f, 10.0f, 0.01f, &point_size_));
 }
 
-auto Interface::display(ComputeConfig& compute, Camera& camera) -> void {
+auto Interface::display(Compute& compute, Camera& camera) -> void {
     compute.update_simulation(camera);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -39,13 +39,6 @@ auto Interface::display(ComputeConfig& compute, Camera& camera) -> void {
         }
 
         if (full_screen_) {
-            auto dev_id = -1;
-
-            checkCudaErrors(cudaGetDevice(&dev_id));
-
-            auto properties = cudaDeviceProp{};
-            checkCudaErrors(cudaGetDeviceProperties(&properties, dev_id));
-
             const auto win_coords = WinCoords{};
 
             const auto msg1 = display_interactions_ ? std::format("{:.2f} billion interactions per second", compute.interactions_per_second()) : std::format("{:.2f} GFLOP/s", compute.gflops());
@@ -55,7 +48,7 @@ auto Interface::display(ComputeConfig& compute, Camera& camera) -> void {
             glBlendFunc(GL_ONE_MINUS_DST_COLOR, GL_ZERO);    // invert color
             glEnable(GL_BLEND);
             glColor3f(0.46f, 0.73f, 0.0f);
-            glPrint(80, glutGet(GLUT_WINDOW_HEIGHT) - 122, properties.name, GLUT_BITMAP_TIMES_ROMAN_24);
+            glPrint(80, glutGet(GLUT_WINDOW_HEIGHT) - 122, cuda::device::current::get().name(), GLUT_BITMAP_TIMES_ROMAN_24);
             glColor3f(1.0f, 1.0f, 1.0f);
             glPrint(80, glutGet(GLUT_WINDOW_HEIGHT) - 96, msg2, GLUT_BITMAP_TIMES_ROMAN_24);
             glColor3f(1.0f, 1.0f, 1.0f);

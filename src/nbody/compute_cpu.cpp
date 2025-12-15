@@ -67,17 +67,17 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCPU::s
     }
 }
 
-template <std::floating_point T> auto ComputeCPU::run_benchmark(int nb_iterations, float dt, BodySystemCPU<T>& nbody) -> float {
+template <std::floating_point T> auto ComputeCPU::run_benchmark(int nb_iterations, float dt, BodySystemCPU<T>& nbody) -> Milliseconds {
     const auto start = Clock::now();
 
     for (int i = 0; i < nb_iterations; ++i) {
         nbody.update(dt);
     }
 
-    return MilliSeconds{Clock::now() - start}.count();
+    return Milliseconds{Clock::now() - start};
 }
 
-auto ComputeCPU::run_benchmark(int nb_iterations, float dt) -> float {
+auto ComputeCPU::run_benchmark(int nb_iterations, float dt) -> Milliseconds {
     if (fp64_enabled_) {
         return run_benchmark(nb_iterations, dt, *nbody_fp64_);
     } else {
@@ -135,9 +135,9 @@ auto ComputeCPU::update_params(const NBodyParams& params) -> void {
     }
 }
 
-auto ComputeCPU::get_milliseconds_passed() -> float {
+auto ComputeCPU::get_milliseconds_passed() -> Milliseconds {
     const auto now          = Clock::now();
-    const auto milliseconds = MilliSeconds{now - reset_time_}.count();
+    const auto milliseconds = Milliseconds{now - reset_time_};
 
     reset_time_ = now;
 

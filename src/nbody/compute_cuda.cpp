@@ -2,20 +2,60 @@
 
 #include "bodysystemcpu.hpp"
 #include "bodysystemcuda.hpp"
+#include "bodysystemcuda_default.hpp"
+#include "bodysystemcuda_host_memory.hpp"
 #include "helper_cuda.hpp"
 #include "interface.hpp"
 
+#include <cuda/api.hpp>
+
 #include <print>
 
-ComputeCUDA::ComputeCUDA(std::size_t nb_requested_devices, bool enable_host_mem, bool use_pbo, int device, std::size_t block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params)
-    : ComputeCUDA(nb_requested_devices, enable_host_mem, use_pbo, device, block_size, fp64_enabled, num_bodies, params, {}, {}, {}, {}) {}
+namespace {
+// General GPU Device CUDA Initialization
+auto initialise_gpu() -> cuda::device_t {
+    auto device = cuda::device::current::get();
+
+    using enum cuda::device::attribute_t;
+
+    const auto compute_mode = device.get_attribute(CU_DEVICE_ATTRIBUTE_COMPUTE_MODE);
+
+    if (compute_mode == CU_COMPUTEMODE_PROHIBITED) {
+        throw std::runtime_error("Error: device is running in <Compute Mode Prohibited>, no threads can use cudaSetDevice().\n");
+    }
+
+    const auto major = device.compute_capability().major();
+
+    if (major < 1) {
+        throw std::runtime_error("GPU device does not support CUDA.\n");
+    }
+
+    device.architecture().name();
+
+    std::println("CUDA Device: \"{}\"\n", device.architecture().name());
+
+    return device;
+}
+
+auto get_main_device() -> cuda::device_t {
+    const auto nb_devices_available = cuda::device::count();
+
+    if (nb_devices_available == 0) {
+        throw std::runtime_error("gpuDeviceInit() CUDA error: no devices supporting CUDA.\n");
+    }
+
+    return initialise_gpu();
+}
+
+}    // namespace
+
+ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params)
+    : ComputeCUDA(enable_host_mem, use_pbo, block_size, fp64_enabled, num_bodies, params, {}, {}, {}, {}) {}
 
 ComputeCUDA::ComputeCUDA(
-    std::size_t         nb_requested_devices,
     bool                enable_host_mem,
     bool                use_pbo,
-    int                 device,
-    std::size_t         block_size,
+    int                 block_size,
     double              fp64_enabled,
     std::size_t         num_bodies,
     const NBodyParams&  params,
@@ -23,143 +63,36 @@ ComputeCUDA::ComputeCUDA(
     std::vector<float>  velocities_fp32,
     std::vector<double> positions_fp64,
     std::vector<double> velocities_fp64)
-    : fp64_enabled_(fp64_enabled), use_host_mem_(enable_host_mem), use_pbo_(use_pbo) {
-    assert(!(use_host_mem_ && use_pbo_));
+    : fp64_enabled_(fp64_enabled), use_host_mem_(enable_host_mem), use_pbo_(use_pbo), host_mem_sync_event_(cuda::event::create(cuda::device::current::get())), start_event_(cuda::event::create(cuda::device::current::get())),
+      stop_event_(cuda::event::create(cuda::device::current::get())) {
+    const auto main_device = cuda::device::current::get();
 
-    auto nb_devices_requested = 1;
+    const auto compute_capability = main_device.compute_capability();
 
-    if (nb_requested_devices > 0) {
-        nb_devices_requested = static_cast<int>(nb_requested_devices);
-        std::println("number of CUDA devices  = {}", nb_devices_requested);
-    }
+    const auto major = compute_capability.major();
+    const auto minor = compute_capability.minor();
 
-    {
-        auto nb_devices_available = 0;
-        cudaGetDeviceCount(&nb_devices_available);
+    std::println("> Compute {}.{} CUDA device: [{}]", major, minor, main_device.name());
 
-        if (nb_devices_available < nb_devices_requested) {
-            throw std::invalid_argument(std::format("Error: only {} Devices available, {} requested.", nb_devices_available, nb_devices_requested));
+    if (use_host_mem_) {
+        if (!main_device.properties().can_map_host_memory()) {
+            throw std::invalid_argument(std::format("Device {} cannot map host memory!", main_device.name()));
+        }
+
+        const auto result = cudaSetDeviceFlags(cudaDeviceMapHost);
+
+        if (result) {
+            throw std::runtime_error(std::format("CUDA error. Could not set device flag cudaDeviceMapHost for device {}: {} - {}", main_device.name(), static_cast<unsigned int>(result), cudaGetErrorName(result)));
         }
     }
 
-    auto use_p2p = true;    // this is always optimal to use P2P path when available
-
-    if (nb_devices_requested > 1) {
-        // If user did not explicitly request host memory to be used (false by default), we default to P2P.
-        // We fallback to host memory, if any of GPUs does not support P2P.
-        if (!enable_host_mem) {
-            auto all_gpus_support_p2p = true;
-            // Enable P2P only in one direction, as every peer will access gpu0
-            for (auto i = 1; i < nb_devices_requested; ++i) {
-                auto canAccessPeer = 0;
-                checkCudaErrors(cudaDeviceCanAccessPeer(&canAccessPeer, i, 0));
-
-                if (canAccessPeer != 1) {
-                    all_gpus_support_p2p = false;
-                }
-            }
-
-            if (!all_gpus_support_p2p) {
-                use_host_mem_ = true;
-                use_p2p       = false;
-            }
-        }
+    // CC 1.2 and earlier do not support double precision
+    if (major * 10 + minor <= 12) {
+        double_supported_ = false;
     }
 
-    std::println("> Simulation data stored in {} memory", use_host_mem_ ? "system" : "video");
-    std::println("> {} precision floating point simulation", fp64_enabled_ ? "Double" : "Single");
-    std::println("> {} Devices used for simulation", nb_devices_requested);
-
-    auto dev_id = 0;
-
-    auto custom_gpu = false;
-
-    auto cuda_properties = cudaDeviceProp{};
-
-    if (device != -1) {
-        custom_gpu = true;
-    }
-
-    // If the command-line has a device number specified, use it
-    if (custom_gpu) {
-        dev_id = device;
-        assert(dev_id >= 0);
-
-        const auto new_dev_ID = gpuDeviceInit(dev_id);
-
-        if (new_dev_ID < 0) {
-            throw std::invalid_argument(std::format("Could not use custom CUDA device: {}", dev_id));
-        }
-
-        dev_id = new_dev_ID;
-
-    } else {
-        // Otherwise pick the device with highest Gflops/s
-        dev_id = gpuGetMaxGflopsDeviceId();
-        checkCudaErrors(cudaSetDevice(dev_id));
-        int major = 0, minor = 0;
-        checkCudaErrors(cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev_id));
-        checkCudaErrors(cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, dev_id));
-        std::println(R"(GPU Device {}: "{}" with compute capability {}.{}\n)", dev_id, _ConvertSMVer2ArchName(major, minor), major, minor);
-    }
-
-    checkCudaErrors(cudaGetDevice(&dev_id));
-    checkCudaErrors(cudaGetDeviceProperties(&cuda_properties, dev_id));
-
-    // Initialize devices
-    assert(!(custom_gpu && (nb_devices_requested > 1)));
-
-    if (custom_gpu || nb_devices_requested == 1) {
-        auto properties = cudaDeviceProp{};
-        checkCudaErrors(cudaGetDeviceProperties(&properties, dev_id));
-        std::println("> Compute {}.{} CUDA device: [{}]", properties.major, properties.minor, properties.name);
-        // CC 1.2 and earlier do not support double precision
-        if (properties.major * 10 + properties.minor <= 12) {
-            double_supported_ = false;
-        }
-
-    } else {
-        for (int i = 0; i < nb_devices_requested; i++) {
-            auto properties = cudaDeviceProp{};
-            checkCudaErrors(cudaGetDeviceProperties(&properties, i));
-
-            std::println("> Compute {}.{} CUDA device: [{}]", properties.major, properties.minor, properties.name);
-
-            if (use_host_mem_) {
-                if (!properties.canMapHostMemory) {
-                    throw std::invalid_argument(std::format("Device {} cannot map host memory!", i));
-                }
-
-                if (nb_devices_requested > 1) {
-                    checkCudaErrors(cudaSetDevice(i));
-                }
-
-                checkCudaErrors(cudaSetDeviceFlags(cudaDeviceMapHost));
-            }
-
-            // CC 1.2 and earlier do not support double precision
-            if (properties.major * 10 + properties.minor <= 12) {
-                double_supported_ = false;
-            }
-        }
-    }
-
-    if (fp64_enabled_ && !double_supported_) {
+    if (fp64_enabled_ && (!double_supported_)) {
         throw std::invalid_argument("One or more of the requested devices does not support double precision floating-point");
-    }
-
-    auto blockSize = static_cast<int>(block_size);
-
-    // default number of bodies is #SMs * 4 * CTA size
-    if (nb_devices_requested == 1) {
-        nb_bodies_ = num_bodies != 0 ? num_bodies : blockSize * 4 * cuda_properties.multiProcessorCount;
-    } else {
-        nb_bodies_ = 0;
-        for (auto i = 0; i < nb_devices_requested; ++i) {
-            auto properties = cudaDeviceProp{};
-            checkCudaErrors(cudaGetDeviceProperties(&properties, i));
-            nb_bodies_ += blockSize * (properties.major >= 2 ? 4 : 1) * properties.multiProcessorCount;
-        }
     }
 
     if (num_bodies != 0u) {
@@ -167,33 +100,49 @@ ComputeCUDA::ComputeCUDA(
 
         assert(nb_bodies_ >= 1);
 
-        if (nb_bodies_ % blockSize) {
-            auto new_nb_bodies = ((nb_bodies_ / blockSize) + 1) * blockSize;
-            std::println(R"(Warning: "number of bodies" specified {} is not a multiple of {}.)", nb_bodies_, blockSize);
+        if (nb_bodies_ % block_size) {
+            auto new_nb_bodies = ((nb_bodies_ / block_size) + 1) * block_size;
+            std::println(R"(Warning: "number of bodies" specified {} is not a multiple of {}.)", nb_bodies_, block_size);
             std::println("Rounding up to the nearest multiple: {}.", new_nb_bodies);
             nb_bodies_ = new_nb_bodies;
         } else {
             std::println("number of bodies = {}", nb_bodies_);
         }
-    }
-
-    if (!positions_fp32.empty()) {
-        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, nb_devices_requested, blockSize, use_p2p, dev_id, params, std::move(positions_fp32), std::move(velocities_fp32));
-
-        if (double_supported_) {
-            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, nb_devices_requested, blockSize, use_p2p, dev_id, params, std::move(positions_fp64), std::move(velocities_fp64));
-        }
     } else {
-        nbody_fp32_ = std::make_unique<BodySystemCUDA<float>>(*this, nb_devices_requested, blockSize, use_p2p, dev_id, params);
-
-        if (double_supported_) {
-            nbody_fp64_ = std::make_unique<BodySystemCUDA<double>>(*this, nb_devices_requested, blockSize, use_p2p, dev_id, params);
-        }
+        // default number of bodies is #SMs * 4 * CTA size
+        nb_bodies_ = num_bodies != 0 ? num_bodies : block_size * 4 * main_device.multiprocessor_count();
     }
-    checkCudaErrors(cudaEventCreate(&start_event_));
-    checkCudaErrors(cudaEventCreate(&stop_event_));
-    checkCudaErrors(cudaEventCreate(&host_mem_sync_event_));
-    checkCudaErrors(cudaEventRecord(start_event_, 0));
+
+    std::println("> Simulation data stored in {} memory", use_host_mem_ ? "system" : "video");
+    std::println("> {} precision floating point simulation", fp64_enabled_ ? "Double" : "Single");
+
+    const auto allocate_nbody = [&]<template <std::floating_point> typename BodySystem>() {
+        const auto n_bodies = static_cast<unsigned int>(nb_bodies_);
+
+        if (!positions_fp32.empty()) {
+            nbody_fp32_ = std::make_unique<BodySystem<float>>(n_bodies, block_size, params, std::move(positions_fp32), std::move(velocities_fp32));
+
+            if (double_supported_) {
+                nbody_fp64_ = std::make_unique<BodySystem<double>>(n_bodies, block_size, params, std::move(positions_fp64), std::move(velocities_fp64));
+            }
+        } else {
+            nbody_fp32_ = std::make_unique<BodySystem<float>>(n_bodies, block_size, params);
+
+            if (double_supported_) {
+                nbody_fp64_ = std::make_unique<BodySystem<double>>(n_bodies, block_size, params);
+            }
+        }
+    };
+
+    if (use_pbo_) {
+        allocate_nbody.template operator()<BodySystemCUDAGraphics>();
+    } else if (use_host_mem_) {
+        allocate_nbody.template operator()<BodySystemCUDAHostMemory>();
+    } else {
+        allocate_nbody.template operator()<BodySystemCUDADefault>();
+    }
+
+    start_event_.record();
 }
 
 template <std::floating_point TNew, std::floating_point TOld> auto ComputeCUDA::switch_precision(BodySystemCUDA<TNew>& new_nbody, const BodySystemCUDA<TOld>& old_nbody) -> void {
@@ -227,27 +176,21 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCUDA::
     cudaDeviceSynchronize();
 }
 
-template <std::floating_point T> auto ComputeCUDA::run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> float {
+template <std::floating_point T> auto ComputeCUDA::run_benchmark(int nb_iterations, float dt, BodySystemCUDA<T>& nbody) -> Milliseconds {
     // once without timing to prime the device
 
     nbody.update(dt);
 
-    auto milliseconds = 0.f;
-
-    checkCudaErrors(cudaEventRecord(start_event_, 0));
+    start_event_.record();
 
     for (int i = 0; i < nb_iterations; ++i) {
         nbody.update(dt);
     }
 
-    checkCudaErrors(cudaEventRecord(stop_event_, 0));
-    checkCudaErrors(cudaEventSynchronize(stop_event_));
-    checkCudaErrors(cudaEventElapsedTime(&milliseconds, start_event_, stop_event_));
-
-    return milliseconds;
+    return get_milliseconds_passed();
 }
 
-auto ComputeCUDA::run_benchmark(int nb_iterations, float dt) -> float {
+auto ComputeCUDA::run_benchmark(int nb_iterations, float dt) -> Milliseconds {
     if (fp64_enabled_) {
         return run_benchmark(nb_iterations, dt, *nbody_fp64_);
     } else {
@@ -288,7 +231,8 @@ auto ComputeCUDA::set_values(std::span<const double> positions, std::span<const 
 }
 
 auto ComputeCUDA::update(float dt) -> void {
-    cudaEventRecord(host_mem_sync_event_);    // insert an event to wait on before rendering
+    // insert an event to wait on before rendering
+    host_mem_sync_event_.record();
 
     if (fp64_enabled_) {
         nbody_fp64_->update(dt);
@@ -312,13 +256,13 @@ auto ComputeCUDA::update_params(const NBodyParams& params) -> void {
     }
 }
 
-auto ComputeCUDA::get_milliseconds_passed() -> float {
-    auto milliseconds = 0.f;
+auto ComputeCUDA::get_milliseconds_passed() -> Milliseconds {
+    stop_event_.record();
+    stop_event_.synchronize();
 
-    checkCudaErrors(cudaEventRecord(stop_event_, 0));
-    checkCudaErrors(cudaEventSynchronize(stop_event_));
-    checkCudaErrors(cudaEventElapsedTime(&milliseconds, start_event_, stop_event_));
-    checkCudaErrors(cudaEventRecord(start_event_, 0));
+    const auto milliseconds = cuda::event::time_elapsed_between(start_event_, stop_event_);
+
+    start_event_.record();
 
     return milliseconds;
 }
@@ -333,7 +277,7 @@ auto ComputeCUDA::display(Interface& interface) const -> void {
     } else {
         // This event sync is required because we are rendering from the host memory that CUDA is writing.
         // If we don't wait until CUDA is done updating it, we will render partially updated data, resulting in a jerky frame rate.
-        cudaEventSynchronize(host_mem_sync_event_);
+        host_mem_sync_event_.synchronize();
 
         if (fp64_enabled_) {
             interface.display_nbody_system(nbody_fp64_->get_position());
@@ -378,8 +322,4 @@ auto ComputeCUDA::compare_results(const NBodyParams& params) -> bool {
     return fp64_enabled_ ? compare_results(params, *nbody_fp64_) : compare_results(params, *nbody_fp32_);
 }
 
-ComputeCUDA::~ComputeCUDA() noexcept {
-    checkCudaErrors(cudaEventDestroy(start_event_));
-    checkCudaErrors(cudaEventDestroy(stop_event_));
-    checkCudaErrors(cudaEventDestroy(host_mem_sync_event_));
-}
+ComputeCUDA::~ComputeCUDA() noexcept = default;
