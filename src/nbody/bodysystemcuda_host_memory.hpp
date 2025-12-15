@@ -1,6 +1,9 @@
 #pragma once
 
 #include "bodysystemcuda.hpp"
+#include "unique_mapped_span.hpp"
+
+#include <concepts>
 
 ///
 /// @brief The CUDA implementation with host memory mapped to device memory.
@@ -23,13 +26,8 @@ template <std::floating_point T> class BodySystemCUDAHostMemory : public BodySys
  private:
     auto _initialize() -> void;
 
-    // Host data
-    std::array<T*, 2> host_pos_{nullptr, nullptr};
-    T*                host_vel_ = nullptr;
-
-    // Device data
-    std::array<T*, 2> device_pos_{nullptr, nullptr};
-    T*                device_vel_ = nullptr;
+    std::array<UniqueMappedSpan<T>, 2> positions_;
+    UniqueMappedSpan<T>                velocities_;
 };
 
 extern template BodySystemCUDAHostMemory<float>;

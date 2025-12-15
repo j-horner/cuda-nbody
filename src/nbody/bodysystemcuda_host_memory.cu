@@ -2,6 +2,8 @@
 #include "helper_cuda.hpp"
 #include "integrate_nbody_cuda.hpp"
 
+#include <algorithm>
+
 #include <cassert>
 
 template <std::floating_point T> BodySystemCUDAHostMemory<T>::BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
@@ -23,52 +25,39 @@ BodySystemCUDAHostMemory<T>::BodySystemCUDAHostMemory(unsigned int nb_bodies, un
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::_initialize() -> void {
-    const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
-
-    checkCudaErrors(cudaHostAlloc((void**)&host_pos_[0], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
-    checkCudaErrors(cudaHostAlloc((void**)&host_pos_[1], memSize, cudaHostAllocMapped | cudaHostAllocPortable));
-    checkCudaErrors(cudaHostAlloc((void**)&host_vel_, memSize, cudaHostAllocMapped | cudaHostAllocPortable));
-
-    memset(host_pos_[0], 0, memSize);
-    memset(host_pos_[1], 0, memSize);
-    memset(host_vel_, 0, memSize);
-
-    checkCudaErrors(cudaHostGetDevicePointer((void**)&device_pos_[0], (void*)host_pos_[0], 0));
-    checkCudaErrors(cudaHostGetDevicePointer((void**)&device_pos_[1], (void*)host_pos_[1], 0));
-    checkCudaErrors(cudaHostGetDevicePointer((void**)&device_vel_, (void*)host_vel_, 0));
+    positions_[0] = UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0});
+    positions_[1] = UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0});
+    velocities_   = UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0});
 }
 
-template <std::floating_point T> BodySystemCUDAHostMemory<T>::~BodySystemCUDAHostMemory() noexcept {
-    checkCudaErrors(cudaFreeHost(host_pos_[0]));
-    checkCudaErrors(cudaFreeHost(host_pos_[1]));
-    checkCudaErrors(cudaFreeHost(host_vel_));
-}
+template <std::floating_point T> BodySystemCUDAHostMemory<T>::~BodySystemCUDAHostMemory() noexcept = default;
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_, this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
+    integrateNbodySystem<
+        T>(positions_[1 - this->current_read_].device_ptr(), positions_[this->current_read_].device_ptr(), velocities_.device_ptr(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
 
     std::swap(this->current_read_, this->current_write_);
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::get_position() const -> std::span<const T> {
-    return {host_pos_[this->current_read_], this->nb_bodies_ * 4};
+    return {positions_[this->current_read_].host_ptr(), this->nb_bodies_ * 4};
 }
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::get_velocity() const -> std::span<const T> {
-    return {host_vel_, this->nb_bodies_ * 4};
+    return {velocities_.host_ptr(), this->nb_bodies_ * 4};
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_position(std::span<const T> data) -> void {
     this->current_read_  = 0;
     this->current_write_ = 1;
 
-    memcpy(host_pos_[this->current_read_], data.data(), this->nb_bodies_ * 4 * sizeof(T));
+    std::ranges::copy(data, positions_[this->current_read_].host_ptr());
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_velocity(std::span<const T> data) -> void {
     this->current_read_  = 0;
     this->current_write_ = 1;
 
-    memcpy(host_vel_, data.data(), this->nb_bodies_ * 4 * sizeof(T));
+    std::ranges::copy(data, velocities_.host_ptr());
 }
 
 template BodySystemCUDAHostMemory<float>;
