@@ -46,8 +46,6 @@ class ParticleRenderer {
     template <std::floating_point T> auto display(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
 
  private:    // methods
-    void resetPBO();
-
     void _initGL();
     void _createTexture();
 

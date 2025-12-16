@@ -177,12 +177,6 @@ ParticleRenderer::ParticleRenderer(std::size_t nb_bodies) : colour_(initialise_c
     _initGL();
 }
 
-void ParticleRenderer::resetPBO() {
-    // TODO: this function is never actually used?
-    // TODO: glGenBuffers and glDeleteBuffers should be managed better
-    glDeleteBuffers(1, reinterpret_cast<GLuint*>(&pbo_));
-}
-
 template <std::floating_point T> auto ParticleRenderer::draw_points(bool color, unsigned int pbo) -> void {
     assert(pbo != 0);
 
