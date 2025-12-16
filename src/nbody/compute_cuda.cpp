@@ -137,6 +137,10 @@ ComputeCUDA::ComputeCUDA(
 
     if (use_pbo_) {
         allocate_nbody.template operator()<BodySystemCUDAGraphics>();
+
+        nbody_fp32_pbo_ = dynamic_cast<BodySystemCUDAGraphics<float>*>(nbody_fp32_.get());
+        nbody_fp64_pbo_ = dynamic_cast<BodySystemCUDAGraphics<double>*>(nbody_fp64_.get());
+
     } else if (use_host_mem_) {
         allocate_nbody.template operator()<BodySystemCUDAHostMemory>();
     } else {
@@ -271,9 +275,9 @@ auto ComputeCUDA::get_milliseconds_passed() -> Milliseconds {
 auto ComputeCUDA::display(Interface& interface) const -> void {
     if (use_pbo_) {
         if (fp64_enabled_) {
-            interface.display_nbody_system_fp64(nbody_fp64_->getCurrentReadBuffer());
+            interface.display_nbody_system_fp64(nbody_fp64_pbo_->getCurrentReadBuffer());
         } else {
-            interface.display_nbody_system_fp32(nbody_fp32_->getCurrentReadBuffer());
+            interface.display_nbody_system_fp32(nbody_fp32_pbo_->getCurrentReadBuffer());
         }
     } else {
         // This event sync is required because we are rendering from the host memory that CUDA is writing.

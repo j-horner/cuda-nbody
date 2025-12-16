@@ -43,8 +43,6 @@ template <std::floating_point T> class BodySystemCUDA {
     BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
     BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
 
-    auto virtual getCurrentReadBuffer() const noexcept -> unsigned int { return 0u; }
-
     auto virtual get_position() const -> std::span<const T> = 0;
     auto virtual get_velocity() const -> std::span<const T> = 0;
 
