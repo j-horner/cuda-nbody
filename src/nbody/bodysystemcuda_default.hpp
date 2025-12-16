@@ -4,6 +4,9 @@
 
 #include <thrust/device_vector.h>
 
+#include <array>
+#include <concepts>
+
 ///
 /// @brief  The default CUDA implementation. No graphics interop, no host memory.
 ///
@@ -23,7 +26,7 @@ template <std::floating_point T> class BodySystemCUDADefault : public BodySystem
     ~BodySystemCUDADefault() noexcept;
 
  private:
-    auto _initialize() -> void;
+    auto initialize() -> void;
 
     // Host data
     mutable std::vector<T> host_pos_;

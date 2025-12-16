@@ -2,6 +2,10 @@
 
 #include "bodysystemcuda.hpp"
 
+#include <array>
+
+struct cudaGraphicsResource;
+
 ///
 /// @brief  The CUDA implementation using OpenGL interop. Some GPU buffers are allocated by OpenGL.
 ///
@@ -23,7 +27,7 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
     ~BodySystemCUDAGraphics() noexcept;
 
  private:
-    auto _initialize() -> void;
+    auto initialize() -> void;
 
     // Host data
     mutable std::vector<T> host_pos_;

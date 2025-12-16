@@ -29,26 +29,24 @@
 
 #include "bodysystemcuda.hpp"
 
-#include "gl_includes.hpp"
 #include "helper_cuda.hpp"
-#include "integrate_nbody_cuda.hpp"
 #include "params.hpp"
 #include "randomise_bodies.hpp"
-#include "vec.hpp"
 
-#include <cuda/api.hpp>
-#include <cuda_gl_interop.h>
-
-#include <algorithm>
 #include <vector>
-
-#include <cassert>
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
 
 cudaError_t setSofteningSquared(float softeningSq);
 cudaError_t setSofteningSquared(double softeningSq);
+
+namespace {
+
+template <std::floating_point T> auto set_softening(T softening) -> void {
+    const auto softeningSq = softening * softening;
+
+    checkCudaErrors(setSofteningSquared(softeningSq));
+}
+
+}    // namespace
 
 template <std::floating_point T>
 BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params)
@@ -57,7 +55,7 @@ BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize
 template <std::floating_point T>
 BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
     : nb_bodies_(nb_bodies), block_size_(blockSize), host_pos_vec_(std::move(positions)), host_vel_vec_(std::move(velocities)), damping_(params.damping) {
-    setSoftening(params.softening);
+    set_softening(params.softening);
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams& params, NBodyConfig config) -> void {
@@ -67,14 +65,8 @@ template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::update_params(const NBodyParams& active_params) -> void {
-    setSoftening(active_params.softening);
+    set_softening(active_params.softening);
     damping_ = active_params.damping;
-}
-
-template <std::floating_point T> auto BodySystemCUDA<T>::setSoftening(T softening) -> void {
-    const auto softeningSq = softening * softening;
-
-    checkCudaErrors(setSofteningSquared(softeningSq));
 }
 
 template BodySystemCUDA<float>;

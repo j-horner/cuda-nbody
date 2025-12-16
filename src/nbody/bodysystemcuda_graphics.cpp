@@ -9,7 +9,7 @@
 #include <cassert>
 
 template <std::floating_point T> BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
-    _initialize();
+    initialize();
 
     BodySystemCUDAGraphics<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
@@ -20,13 +20,13 @@ BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsign
     assert(this->host_pos_vec_.size() == 4 * this->nb_bodies_);
     assert(this->host_vel_vec_.size() == 4 * this->nb_bodies_);
 
-    _initialize();
+    initialize();
 
     set_position(this->host_pos_vec_);
     set_velocity(this->host_vel_vec_);
 }
 
-template <std::floating_point T> auto BodySystemCUDAGraphics<T>::_initialize() -> void {
+template <std::floating_point T> auto BodySystemCUDAGraphics<T>::initialize() -> void {
     const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
 
     host_pos_.resize(this->nb_bodies_ * 4, 0);

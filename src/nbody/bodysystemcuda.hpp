@@ -29,9 +29,7 @@
 
 #include "nbody_config.hpp"
 
-#include <cuda_runtime.h>
-
-#include <array>
+#include <concepts>
 #include <span>
 #include <vector>
 
@@ -73,9 +71,6 @@ template <std::floating_point T> class BodySystemCUDA {
     unsigned int current_write_ = 1u;
 
     unsigned int block_size_;
-
- private:
-    auto setSoftening(T softening) -> void;
 };
 
 extern template BodySystemCUDA<float>;
