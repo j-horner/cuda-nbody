@@ -3,6 +3,7 @@
 #include "bodysystemcpu.hpp"
 #include "bodysystemcuda.hpp"
 #include "bodysystemcuda_default.hpp"
+#include "bodysystemcuda_graphics.hpp"
 #include "bodysystemcuda_host_memory.hpp"
 #include "helper_cuda.hpp"
 #include "interface.hpp"
