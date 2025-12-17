@@ -10,13 +10,15 @@ template <std::size_t N> class BufferObjects;
 
 class BufferObject {
  public:
-    BufferObject(unsigned int buffer);
+    explicit BufferObject(unsigned int buffer_idx);
 
     BufferObject(const BufferObject&) = delete;
     BufferObject(BufferObject&&)      = delete;
 
     auto operator=(const BufferObject&) -> BufferObject&     = delete;
     auto operator=(BufferObject&&) noexcept -> BufferObject& = delete;
+
+    auto buffer() const noexcept { return buffer_; }
 
     ~BufferObject() noexcept;
 
@@ -26,6 +28,7 @@ class BufferObject {
     static auto current_buffer() noexcept -> unsigned int;
     static auto bind(unsigned int buffer) noexcept -> void;
 
+    unsigned int buffer_;
     unsigned int current_buffer_;
 };
 
@@ -56,7 +59,7 @@ template <std::size_t N> class BufferObjects {
 
     template <std::floating_point T> auto bind_data(std::size_t k, std::span<const T> data) -> void;
 
-    auto use(std::size_t k) const -> BufferObject { return {buffers_[k]}; }
+    auto use(std::size_t k) const -> BufferObject { return BufferObject{buffers_[k]}; }
 
     auto buffer(std::size_t k) const noexcept { return buffers_[k]; }
 

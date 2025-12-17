@@ -8,8 +8,8 @@
 
 #include <cassert>
 
-BufferObject::BufferObject(unsigned int buffer) : current_buffer_(current_buffer()) {
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+BufferObject::BufferObject(unsigned int buffer_idx) : buffer_(buffer_idx), current_buffer_(current_buffer()) {
+    glBindBuffer(GL_ARRAY_BUFFER, buffer_);
     // check_OpenGL_error();
 }
 

@@ -25,7 +25,7 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
     auto set_position(std::span<const T> data) -> void final;
     auto set_velocity(std::span<const T> data) -> void final;
 
-    auto getCurrentReadBuffer() const noexcept -> unsigned int { return pbos_.buffer(BodySystemCUDA<T>::current_read_); }
+    auto getCurrentReadBuffer() const noexcept { return pbos_.use(BodySystemCUDA<T>::current_read_); }
 
     ~BodySystemCUDAGraphics() noexcept;
 

@@ -46,13 +46,13 @@ class ParticleRenderer {
     auto display(DisplayMode mode, float sprite_size, std::span<const double> pos) -> void;
 
     // invoked by GPU impl using OpenGL interop
-    template <std::floating_point T> auto display(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
+    template <std::floating_point T> auto display(DisplayMode mode, float sprite_size, const BufferObject& pbo) -> void;
 
  private:    // methods
     void _initGL();
     void _createTexture();
 
-    template <std::floating_point T> auto draw_points(bool color, unsigned int pbo) -> void;
+    template <std::floating_point T> auto draw_points(bool color, const BufferObject& pbo) -> void;
 
     std::vector<float> colour_;
 
@@ -67,5 +67,5 @@ class ParticleRenderer {
     BufferObjects<1> pbo_64_;
 };
 
-extern template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
-extern template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
+extern template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, const BufferObject& pbo) -> void;
+extern template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, const BufferObject& pbo) -> void;

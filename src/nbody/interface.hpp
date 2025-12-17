@@ -7,6 +7,7 @@
 
 class Camera;
 class Compute;
+class BufferObject;
 
 class Interface {
  public:
@@ -33,8 +34,8 @@ class Interface {
     auto display_nbody_system(std::span<const float> positions) -> void;
     auto display_nbody_system(std::span<const double> positions) -> void;
 
-    auto display_nbody_system_fp32(unsigned int pbo) -> void;
-    auto display_nbody_system_fp64(unsigned int pbo) -> void;
+    auto display_nbody_system_fp32(const BufferObject& pbo) -> void;
+    auto display_nbody_system_fp64(const BufferObject& pbo) -> void;
 
  private:
     bool                          display_enabled = true;

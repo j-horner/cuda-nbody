@@ -101,9 +101,9 @@ auto Interface::display_nbody_system(std::span<const double> positions) -> void 
     renderer_.display(display_mode_, point_size_, positions);
 }
 
-auto Interface::display_nbody_system_fp32(unsigned int pbo) -> void {
+auto Interface::display_nbody_system_fp32(const BufferObject& pbo) -> void {
     renderer_.display<float>(display_mode_, point_size_, pbo);
 }
-auto Interface::display_nbody_system_fp64(unsigned int pbo) -> void {
+auto Interface::display_nbody_system_fp64(const BufferObject& pbo) -> void {
     renderer_.display<double>(display_mode_, point_size_, pbo);
 }

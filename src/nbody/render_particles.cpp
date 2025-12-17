@@ -88,10 +88,8 @@ ParticleRenderer::ParticleRenderer(std::size_t nb_bodies)
     _initGL();
 }
 
-template <std::floating_point T> auto ParticleRenderer::draw_points(bool color, unsigned int pbo) -> void {
-    assert(pbo != 0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, pbo);
+template <std::floating_point T> auto ParticleRenderer::draw_points(bool color, const BufferObject& pbo) -> void {
+    glBindBuffer(GL_ARRAY_BUFFER, pbo.buffer());
     check_OpenGL_error();
     glEnableClientState(GL_VERTEX_ARRAY);
 
@@ -126,9 +124,7 @@ template <std::floating_point T> auto ParticleRenderer::draw_points(bool color, 
     check_OpenGL_error();
 }
 
-template <std::floating_point T> auto ParticleRenderer::display(DisplayMode mode, float sprite_size, unsigned int pbo) -> void {
-    assert(pbo != 0u);
-
+template <std::floating_point T> auto ParticleRenderer::display(DisplayMode mode, float sprite_size, const BufferObject& pbo) -> void {
     constexpr auto& base_colour_ = std::is_same_v<T, double> ? fp64_colour : fp32_colour;
 
     switch (mode) {
@@ -218,7 +214,7 @@ auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<co
 
     pbo_32_.bind_data(0, pos);
 
-    display<float>(mode, sprite_size, pbo_32_.buffer(0));
+    display<float>(mode, sprite_size, pbo_32_.use(0));
 }
 
 auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<const double> pos) -> void {
@@ -226,7 +222,7 @@ auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<co
 
     pbo_64_.bind_data(0, pos);
 
-    display<double>(mode, sprite_size, pbo_64_.buffer(0));
+    display<double>(mode, sprite_size, pbo_64_.use(0));
 }
 
 void ParticleRenderer::_initGL() {
@@ -335,5 +331,5 @@ void ParticleRenderer::_createTexture() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, resolution, resolution, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
 }
 
-template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
-template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
+template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, const BufferObject& pbo) -> void;
+template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, const BufferObject& pbo) -> void;
