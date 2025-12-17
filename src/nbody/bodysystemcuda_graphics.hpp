@@ -3,6 +3,8 @@
 #include "bodysystemcuda.hpp"
 #include "buffer_objects.hpp"
 
+#include <thrust/device_vector.h>
+
 #include <array>
 
 struct cudaGraphicsResource;
@@ -35,8 +37,8 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
     mutable std::vector<T> host_vel_;
 
     // Device data
-    std::array<T*, 2> device_pos_{nullptr, nullptr};
-    T*                device_vel_ = nullptr;
+    std::array<T*, 2>        device_pos_{nullptr, nullptr};
+    thrust::device_vector<T> device_vel_;
 
     BufferObjects<2>      pbos_;
     cudaGraphicsResource* graphics_resource_[2];

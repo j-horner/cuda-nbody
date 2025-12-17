@@ -1,10 +1,10 @@
 #include "bodysystemcuda_graphics.hpp"
-
 #include "gl_includes.hpp"
 #include "helper_cuda.hpp"
 #include "integrate_nbody_cuda.hpp"
 
 #include <cuda_gl_interop.h>
+#include <thrust/copy.h>
 
 #include <cassert>
 
@@ -44,12 +44,10 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::initialize() ->
         checkCudaErrors(cudaGraphicsGLRegisterBuffer(&graphics_resource_[i], pbos_.buffer(i), cudaGraphicsMapFlagsNone));
     }
 
-    checkCudaErrors(cudaMalloc((void**)&device_vel_, memSize));
+    device_vel_.resize(this->nb_bodies_ * 4, 0);
 }
 
 template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraphics() noexcept {
-    checkCudaErrors(cudaFree((void**)device_vel_));
-
     checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[0]));
     checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[1]));
 }
@@ -62,7 +60,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaT
     checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[this->current_read_]), &bytes, graphics_resource_[this->current_read_]));
     checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[1 - this->current_read_]), &bytes, graphics_resource_[1 - this->current_read_]));
 
-    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_, this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
+    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
 
     checkCudaErrors(cudaGraphicsUnmapResources(2, graphics_resource_, 0));
 
@@ -70,7 +68,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaT
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() const -> std::span<const T> {
-    const auto ddata = device_pos_[this->current_read_];
+    const auto device_data = device_pos_[this->current_read_];
 
     {
         auto pgres = graphics_resource_[this->current_read_];
@@ -78,9 +76,9 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() 
         checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres, cudaGraphicsMapFlagsReadOnly));
         checkCudaErrors(cudaGraphicsMapResources(1, &pgres, 0));
         size_t bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&ddata, &bytes, pgres));
+        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&device_data, &bytes, pgres));
 
-        checkCudaErrors(cudaMemcpy(host_pos_.data(), ddata, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+        checkCudaErrors(cudaMemcpy(host_pos_.data(), device_data, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
 
         checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
     }
@@ -88,7 +86,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() 
     return host_pos_;
 }
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_velocity() const -> std::span<const T> {
-    checkCudaErrors(cudaMemcpy(host_vel_.data(), device_vel_, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+    thrust::copy(device_vel_.begin(), device_vel_.end(), host_vel_.begin());
 
     return host_vel_;
 }
@@ -104,7 +102,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_velocity(st
     this->current_read_  = 0;
     this->current_write_ = 1;
 
-    checkCudaErrors(cudaMemcpy(device_vel_, data.data(), this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyHostToDevice));
+    thrust::copy(data.begin(), data.end(), device_vel_.begin());
 }
 
 template BodySystemCUDAGraphics<float>;
