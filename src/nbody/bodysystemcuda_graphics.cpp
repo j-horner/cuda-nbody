@@ -34,21 +34,14 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::initialize() ->
 
     // create the position pixel buffer objects for rendering
     // we will actually compute directly from this memory in CUDA too
-    glGenBuffers(2, (GLuint*)pbo_);
+    {
+        const auto host_positions = std::span<const T>{host_pos_};
+
+        pbos_ = BufferObjects<2>::create_dynamic(std::array{host_positions, host_positions});
+    }
 
     for (int i = 0; i < 2; ++i) {
-        glBindBuffer(GL_ARRAY_BUFFER, pbo_[i]);
-        glBufferData(GL_ARRAY_BUFFER, memSize, host_pos_.data(), GL_DYNAMIC_DRAW);
-
-        int size = 0;
-        glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&size);
-
-        if ((unsigned)size != memSize) {
-            fprintf(stderr, "WARNING: Pixel Buffer Object allocation failed!n");
-        }
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&graphics_resource_[i], pbo_[i], cudaGraphicsMapFlagsNone));
+        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&graphics_resource_[i], pbos_.buffer(i), cudaGraphicsMapFlagsNone));
     }
 
     checkCudaErrors(cudaMalloc((void**)&device_vel_, memSize));
@@ -59,7 +52,6 @@ template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraph
 
     checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[0]));
     checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[1]));
-    glDeleteBuffers(2, (const GLuint*)pbo_);
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaTime) -> void {
@@ -105,17 +97,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_position(st
     this->current_read_  = 0;
     this->current_write_ = 1;
 
-    glBindBuffer(GL_ARRAY_BUFFER, pbo_[this->current_read_]);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * sizeof(T) * this->nb_bodies_, data.data());
-
-    int size = 0;
-    glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, (GLint*)&size);
-
-    if ((unsigned)size != 4 * (sizeof(T) * this->nb_bodies_)) {
-        fprintf(stderr, "WARNING: Pixel Buffer Object download failed!n");
-    }
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    pbos_.bind_data(this->current_read_, data);
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_velocity(std::span<const T> data) -> void {

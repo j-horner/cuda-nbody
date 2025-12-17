@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bodysystemcuda.hpp"
+#include "buffer_objects.hpp"
 
 #include <array>
 
@@ -22,7 +23,7 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
     auto set_position(std::span<const T> data) -> void final;
     auto set_velocity(std::span<const T> data) -> void final;
 
-    auto getCurrentReadBuffer() const noexcept -> unsigned int { return pbo_[BodySystemCUDA<T>::current_read_]; }
+    auto getCurrentReadBuffer() const noexcept -> unsigned int { return pbos_.buffer(BodySystemCUDA<T>::current_read_); }
 
     ~BodySystemCUDAGraphics() noexcept;
 
@@ -37,7 +38,7 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
     std::array<T*, 2> device_pos_{nullptr, nullptr};
     T*                device_vel_ = nullptr;
 
-    unsigned int          pbo_[2];
+    BufferObjects<2>      pbos_;
     cudaGraphicsResource* graphics_resource_[2];
 };
 

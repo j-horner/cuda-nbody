@@ -45,6 +45,7 @@ target_link_libraries(${PROJECT_NAME}_bodysystemcpu
 target_link_libraries(${PROJECT_NAME}_bodysystemcuda
                         PUBLIC
                             CUDA::cudart_static
+                            ${PROJECT_NAME}_buffer_objects
                         PRIVATE
                             ${PROJECT_NAME}_compute_cuda    
                             ${PROJECT_NAME}_params
