@@ -42,7 +42,8 @@ class ParticleRenderer {
     enum DisplayMode { PARTICLE_POINTS, PARTICLE_SPRITES, PARTICLE_SPRITES_COLOR, PARTICLE_NUM_MODES };
 
     // invoked by CPU impl or GPU impl using host memory
-    template <std::floating_point T> auto display(DisplayMode mode, float sprite_size, std::span<const T> pos) -> void;
+    auto display(DisplayMode mode, float sprite_size, std::span<const float> pos) -> void;
+    auto display(DisplayMode mode, float sprite_size, std::span<const double> pos) -> void;
 
     // invoked by GPU impl using OpenGL interop
     template <std::floating_point T> auto display(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
@@ -61,11 +62,10 @@ class ParticleRenderer {
     unsigned int     program_points_  = 0;
     unsigned int     program_sprites_ = 0;
     unsigned int     texture_         = 0;
-    BufferObjects<1> pbo_;
     BufferObjects<1> vbo_colour_;
+    BufferObjects<1> pbo_32_;
+    BufferObjects<1> pbo_64_;
 };
 
-extern template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, std::span<const float> pos) -> void;
-extern template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, std::span<const double> pos) -> void;
 extern template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
 extern template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;

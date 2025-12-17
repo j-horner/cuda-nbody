@@ -75,9 +75,16 @@ auto initialise_colours(std::size_t nb_bodies) -> std::vector<float> {
     return colours;
 }
 
+template <std::floating_point T> auto make_position_pbo(std::size_t nb_bodies) -> BufferObjects<1> {
+    const auto data = std::vector<T>(4 * nb_bodies, T{0});
+    return BufferObjects<1>::create_dynamic(std::array{std::span{data}});
+}
+
 }    // namespace
 
-ParticleRenderer::ParticleRenderer(std::size_t nb_bodies) : colour_(initialise_colours(nb_bodies)), vbo_colour_(BufferObjects<1>::create_static(std::array{std::span<const float>{colour_}})) {
+ParticleRenderer::ParticleRenderer(std::size_t nb_bodies)
+    : colour_(initialise_colours(nb_bodies)), vbo_colour_(BufferObjects<1>::create_static(std::array{std::span<const float>{colour_}})), pbo_32_(make_position_pbo<float>(nb_bodies)),
+      pbo_64_(make_position_pbo<double>(nb_bodies)) {
     _initGL();
 }
 
@@ -206,12 +213,20 @@ template <std::floating_point T> auto ParticleRenderer::display(DisplayMode mode
     check_OpenGL_error();
 }
 
-template <std::floating_point T> auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<const T> pos) -> void {
+auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<const float> pos) -> void {
     assert(pos.size() == colour_.size());
 
-    pbo_.bind_static_data(0, pos);
+    pbo_32_.bind_data(0, pos);
 
-    display<T>(mode, sprite_size, pbo_.buffer(0));
+    display<float>(mode, sprite_size, pbo_32_.buffer(0));
+}
+
+auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<const double> pos) -> void {
+    assert(pos.size() == colour_.size());
+
+    pbo_64_.bind_data(0, pos);
+
+    display<double>(mode, sprite_size, pbo_64_.buffer(0));
 }
 
 void ParticleRenderer::_initGL() {
@@ -320,7 +335,5 @@ void ParticleRenderer::_createTexture() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, resolution, resolution, 0, GL_RGBA, GL_UNSIGNED_BYTE, data.data());
 }
 
-template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, std::span<const float> pos) -> void;
-template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, std::span<const double> pos) -> void;
 template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;
 template auto ParticleRenderer::display<double>(DisplayMode mode, float sprite_size, unsigned int pbo) -> void;

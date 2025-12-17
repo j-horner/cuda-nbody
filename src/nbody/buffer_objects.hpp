@@ -34,14 +34,14 @@ template <std::size_t N> class BufferObjects {
     template <std::floating_point T> static auto create_static(const std::array<std::span<const T>, N>& data) -> BufferObjects {
         auto bo = BufferObjects{};
         for (auto k = std::size_t{0}; k < N; ++k) {
-            bo.bind_static_data<T>(k, data[k]);
+            bo.allocate_and_bind_static_data<T>(k, data[k]);
         }
         return bo;
     }
     template <std::floating_point T> static auto create_dynamic(const std::array<std::span<const T>, N>& data) -> BufferObjects {
         auto bo = BufferObjects{};
         for (auto k = std::size_t{0}; k < N; ++k) {
-            bo.bind_dynamic_data<T>(k, data[k]);
+            bo.allocate_and_bind_dynamic_data<T>(k, data[k]);
         }
         return bo;
     }
@@ -54,8 +54,7 @@ template <std::size_t N> class BufferObjects {
     auto operator=(const BufferObjects&) -> BufferObjects& = delete;
     auto operator=(BufferObjects&&) noexcept -> BufferObjects&;
 
-    template <std::floating_point T> auto bind_static_data(std::size_t k, std::span<const T> data) -> void;
-    template <std::floating_point T> auto bind_dynamic_data(std::size_t k, std::span<const T> data) -> void;
+    template <std::floating_point T> auto bind_data(std::size_t k, std::span<const T> data) -> void;
 
     auto use(std::size_t k) const -> BufferObject { return {buffers_[k]}; }
 
@@ -64,18 +63,27 @@ template <std::size_t N> class BufferObjects {
     ~BufferObjects() noexcept;
 
  private:
+    template <std::floating_point T> auto allocate_and_bind_static_data(std::size_t k, std::span<const T> data) -> void;
+    template <std::floating_point T> auto allocate_and_bind_dynamic_data(std::size_t k, std::span<const T> data) -> void;
+
     std::array<unsigned int, N> buffers_;
 };
 
 extern template BufferObjects<1>;
 extern template BufferObjects<2>;
 
-extern template auto BufferObjects<1>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
-extern template auto BufferObjects<1>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
-extern template auto BufferObjects<1>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
-extern template auto BufferObjects<1>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+extern template auto BufferObjects<1>::bind_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<1>::bind_data<double>(std::size_t k, std::span<const double> data) -> void;
 
-extern template auto BufferObjects<2>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
-extern template auto BufferObjects<2>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
-extern template auto BufferObjects<2>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
-extern template auto BufferObjects<2>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+extern template auto BufferObjects<1>::allocate_and_bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<1>::allocate_and_bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+extern template auto BufferObjects<1>::allocate_and_bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<1>::allocate_and_bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+
+extern template auto BufferObjects<2>::bind_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<2>::bind_data<double>(std::size_t k, std::span<const double> data) -> void;
+
+extern template auto BufferObjects<2>::allocate_and_bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<2>::allocate_and_bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+extern template auto BufferObjects<2>::allocate_and_bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<2>::allocate_and_bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;

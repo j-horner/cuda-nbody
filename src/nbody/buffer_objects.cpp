@@ -64,7 +64,7 @@ template <std::size_t N> BufferObjects<N>::~BufferObjects() noexcept {
     }
 }
 
-template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::bind_static_data(std::size_t k, std::span<const T> data) -> void {
+template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::allocate_and_bind_static_data(std::size_t k, std::span<const T> data) -> void {
     [[maybe_unused]] const auto buffer = use(k);
 
     const auto memory_size = data.size() * sizeof(T);
@@ -80,7 +80,7 @@ template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>:
 
     // check_OpenGL_error();
 }
-template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::bind_dynamic_data(std::size_t k, std::span<const T> data) -> void {
+template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::allocate_and_bind_dynamic_data(std::size_t k, std::span<const T> data) -> void {
     [[maybe_unused]] const auto buffer = use(k);
 
     const auto memory_size = data.size() * sizeof(T);
@@ -96,15 +96,38 @@ template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>:
     // check_OpenGL_error();
 }
 
+template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::bind_data(std::size_t k, std::span<const T> data) -> void {
+    [[maybe_unused]] const auto buffer = use(k);
+
+    const auto memory_size = data.size() * sizeof(T);
+
+    glBufferSubData(GL_ARRAY_BUFFER, 0, memory_size, data.data());
+
+    auto size = GLint{0};
+    glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+
+    if (static_cast<std::size_t>(size) != memory_size) {
+        throw std::runtime_error("Pixel Buffer Object allocation failed!n");
+    }
+
+    // check_OpenGL_error();
+}
+
 template BufferObjects<1>;
 template BufferObjects<2>;
 
-template auto BufferObjects<1>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
-template auto BufferObjects<1>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
-template auto BufferObjects<1>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
-template auto BufferObjects<1>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+template auto BufferObjects<1>::bind_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<1>::bind_data<double>(std::size_t k, std::span<const double> data) -> void;
 
-template auto BufferObjects<2>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
-template auto BufferObjects<2>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
-template auto BufferObjects<2>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
-template auto BufferObjects<2>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+template auto BufferObjects<1>::allocate_and_bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<1>::allocate_and_bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+template auto BufferObjects<1>::allocate_and_bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<1>::allocate_and_bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+
+template auto BufferObjects<2>::bind_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<2>::bind_data<double>(std::size_t k, std::span<const double> data) -> void;
+
+template auto BufferObjects<2>::allocate_and_bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<2>::allocate_and_bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+template auto BufferObjects<2>::allocate_and_bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<2>::allocate_and_bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
