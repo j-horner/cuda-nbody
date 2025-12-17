@@ -1,9 +1,12 @@
 #pragma once
 
+#include <array>
 #include <concepts>
 #include <span>
 
-class BufferObjects;
+#include <cstddef>
+
+template <std::size_t N> class BufferObjects;
 
 class BufferObject {
  public:
@@ -18,7 +21,7 @@ class BufferObject {
     ~BufferObject() noexcept;
 
  private:
-    friend class BufferObjects;
+    template <std::size_t N> friend class BufferObjects;
 
     static auto current_buffer() noexcept -> unsigned int;
     static auto bind(unsigned int buffer) noexcept -> void;
@@ -26,16 +29,20 @@ class BufferObject {
     unsigned int current_buffer_;
 };
 
-class BufferObjects {
+template <std::size_t N> class BufferObjects {
  public:
-    template <std::floating_point T> static auto create_static(std::span<const T> data) noexcept -> BufferObjects {
+    template <std::floating_point T> static auto create_static(const std::array<std::span<const T>, N>& data) -> BufferObjects {
         auto bo = BufferObjects{};
-        bo.bind_static_data<T>(data);
+        for (auto k = std::size_t{0}; k < N; ++k) {
+            bo.bind_static_data<T>(k, data[k]);
+        }
         return bo;
     }
-    template <std::floating_point T> static auto create_dynamic(std::span<const T> data) noexcept -> BufferObjects {
+    template <std::floating_point T> static auto create_dynamic(const std::array<std::span<const T>, N>& data) -> BufferObjects {
         auto bo = BufferObjects{};
-        bo.bind_dynamic_data<T>(data);
+        for (auto k = std::size_t{0}; k < N; ++k) {
+            bo.bind_dynamic_data<T>(k, data[k]);
+        }
         return bo;
     }
 
@@ -47,21 +54,28 @@ class BufferObjects {
     auto operator=(const BufferObjects&) -> BufferObjects& = delete;
     auto operator=(BufferObjects&&) noexcept -> BufferObjects&;
 
-    template <std::floating_point T> auto bind_static_data(std::span<const T> data) noexcept -> void;
-    template <std::floating_point T> auto bind_dynamic_data(std::span<const T> data) noexcept -> void;
+    template <std::floating_point T> auto bind_static_data(std::size_t k, std::span<const T> data) -> void;
+    template <std::floating_point T> auto bind_dynamic_data(std::size_t k, std::span<const T> data) -> void;
 
-    auto use() const -> BufferObject { return {buffer_}; }
+    auto use(std::size_t k) const -> BufferObject { return {buffers_[k]}; }
+
+    auto buffer(std::size_t k) const noexcept { return buffers_[k]; }
 
     ~BufferObjects() noexcept;
 
-    auto buffer() const noexcept { return buffer_; }
-
  private:
-    unsigned int buffer_;
+    std::array<unsigned int, N> buffers_;
 };
 
-extern template auto BufferObjects::bind_static_data<float>(std::span<const float> data) noexcept -> void;
-extern template auto BufferObjects::bind_static_data<double>(std::span<const double> data) noexcept -> void;
+extern template BufferObjects<1>;
+extern template BufferObjects<2>;
 
-extern template auto BufferObjects::bind_dynamic_data<float>(std::span<const float> data) noexcept -> void;
-extern template auto BufferObjects::bind_dynamic_data<double>(std::span<const double> data) noexcept -> void;
+extern template auto BufferObjects<1>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<1>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+extern template auto BufferObjects<1>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<1>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+
+extern template auto BufferObjects<2>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<2>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+extern template auto BufferObjects<2>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+extern template auto BufferObjects<2>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;

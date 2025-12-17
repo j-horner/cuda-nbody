@@ -4,6 +4,8 @@
 
 #include "gl_includes.hpp"
 
+#include <algorithm>
+
 #include <cassert>
 
 BufferObject::BufferObject(unsigned int buffer) : current_buffer_(current_buffer()) {
@@ -32,48 +34,77 @@ auto BufferObject::bind(unsigned int buffer) noexcept -> void {
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
 }
 
-BufferObjects::BufferObjects() noexcept {
-    glGenBuffers(1, reinterpret_cast<GLuint*>(&buffer_));
+template <std::size_t N> BufferObjects<N>::BufferObjects() noexcept {
+    glGenBuffers(N, reinterpret_cast<GLuint*>(buffers_.data()));
     // check_OpenGL_error();
-    assert(buffer_ != 0u);
+    assert(!std::ranges::contains(buffers_, 0u));
 }
 
-BufferObjects::BufferObjects(BufferObjects&& other) noexcept {
+template <std::size_t N> BufferObjects<N>::BufferObjects(BufferObjects&& other) noexcept {
     *this = std::move(other);
 }
 
-auto BufferObjects::operator=(BufferObjects&& other) noexcept -> BufferObjects& {
+template <std::size_t N> auto BufferObjects<N>::operator=(BufferObjects&& other) noexcept -> BufferObjects& {
     if (&other != this) {
-        buffer_       = other.buffer_;
-        other.buffer_ = 0u;
+        buffers_ = other.buffers_;
+        std::ranges::fill(other.buffers_, 0u);
     }
     return *this;
 }
 
-BufferObjects::~BufferObjects() noexcept {
-    if (buffer_ != 0u) {
-        assert(BufferObject::current_buffer() != buffer_);
+template <std::size_t N> BufferObjects<N>::~BufferObjects() noexcept {
+    if (!std::ranges::contains(buffers_, 0u)) {
+        assert(!std::ranges::contains(buffers_, BufferObject::current_buffer()));
 
-        glDeleteBuffers(1, reinterpret_cast<GLuint*>(&buffer_));
+        glDeleteBuffers(N, reinterpret_cast<GLuint*>(buffers_.data()));
         // check_OpenGL_error();
+    } else {
+        constexpr auto zeros = std::array<unsigned int, N>{{{}}};
+        assert(buffers_ == zeros);
     }
 }
 
-template <std::floating_point T> auto BufferObjects::bind_static_data(std::span<const T> data) noexcept -> void {
-    [[maybe_unused]] const auto buffer = use();
+template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::bind_static_data(std::size_t k, std::span<const T> data) -> void {
+    [[maybe_unused]] const auto buffer = use(k);
 
-    glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(T), data.data(), GL_STATIC_DRAW);
+    const auto memory_size = data.size() * sizeof(T);
+
+    glBufferData(GL_ARRAY_BUFFER, memory_size, data.data(), GL_STATIC_DRAW);
+
+    auto size = GLint{0};
+    glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+
+    if (static_cast<std::size_t>(size) != memory_size) {
+        throw std::runtime_error("Pixel Buffer Object allocation failed!n");
+    }
+
     // check_OpenGL_error();
 }
-template <std::floating_point T> auto BufferObjects::bind_dynamic_data(std::span<const T> data) noexcept -> void {
-    [[maybe_unused]] const auto buffer = use();
+template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::bind_dynamic_data(std::size_t k, std::span<const T> data) -> void {
+    [[maybe_unused]] const auto buffer = use(k);
 
-    glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(T), data.data(), GL_DYNAMIC_DRAW);
+    const auto memory_size = data.size() * sizeof(T);
+
+    glBufferData(GL_ARRAY_BUFFER, memory_size, data.data(), GL_DYNAMIC_DRAW);
+
+    auto size = GLint{0};
+    glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+
+    if (static_cast<std::size_t>(size) != memory_size) {
+        throw std::runtime_error("Pixel Buffer Object allocation failed!n");
+    }
     // check_OpenGL_error();
 }
 
-template auto BufferObjects::bind_static_data<float>(std::span<const float> data) noexcept -> void;
-template auto BufferObjects::bind_static_data<double>(std::span<const double> data) noexcept -> void;
+template BufferObjects<1>;
+template BufferObjects<2>;
 
-template auto BufferObjects::bind_dynamic_data<float>(std::span<const float> data) noexcept -> void;
-template auto BufferObjects::bind_dynamic_data<double>(std::span<const double> data) noexcept -> void;
+template auto BufferObjects<1>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<1>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+template auto BufferObjects<1>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<1>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;
+
+template auto BufferObjects<2>::bind_static_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<2>::bind_static_data<double>(std::size_t k, std::span<const double> data) -> void;
+template auto BufferObjects<2>::bind_dynamic_data<float>(std::size_t k, std::span<const float> data) -> void;
+template auto BufferObjects<2>::bind_dynamic_data<double>(std::size_t k, std::span<const double> data) -> void;

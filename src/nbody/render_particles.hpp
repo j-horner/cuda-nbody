@@ -58,11 +58,11 @@ class ParticleRenderer {
     std::span<const float>  pos_;
     std::span<const double> pos_fp64_;
 
-    unsigned int  program_points_  = 0;
-    unsigned int  program_sprites_ = 0;
-    unsigned int  texture_         = 0;
-    BufferObjects pbo_;
-    BufferObjects vbo_colour_;
+    unsigned int     program_points_  = 0;
+    unsigned int     program_sprites_ = 0;
+    unsigned int     texture_         = 0;
+    BufferObjects<1> pbo_;
+    BufferObjects<1> vbo_colour_;
 };
 
 extern template auto ParticleRenderer::display<float>(DisplayMode mode, float sprite_size, std::span<const float> pos) -> void;

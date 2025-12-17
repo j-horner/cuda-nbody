@@ -77,7 +77,7 @@ auto initialise_colours(std::size_t nb_bodies) -> std::vector<float> {
 
 }    // namespace
 
-ParticleRenderer::ParticleRenderer(std::size_t nb_bodies) : colour_(initialise_colours(nb_bodies)), vbo_colour_(BufferObjects::create_static(std::span<const float>{colour_})) {
+ParticleRenderer::ParticleRenderer(std::size_t nb_bodies) : colour_(initialise_colours(nb_bodies)), vbo_colour_(BufferObjects<1>::create_static(std::array{std::span<const float>{colour_}})) {
     _initGL();
 }
 
@@ -98,7 +98,7 @@ template <std::floating_point T> auto ParticleRenderer::draw_points(bool color, 
     const auto nb_particles = colour_.size() / 4;
 
     if (color) {
-        [[maybe_unused]] const auto vbo_buffer = vbo_colour_.use();
+        [[maybe_unused]] const auto vbo_buffer = vbo_colour_.use(0);
 
         // vbo_colour_.use([&]() noexcept {
         glEnableClientState(GL_COLOR_ARRAY);
@@ -209,9 +209,9 @@ template <std::floating_point T> auto ParticleRenderer::display(DisplayMode mode
 template <std::floating_point T> auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<const T> pos) -> void {
     assert(pos.size() == colour_.size());
 
-    pbo_.bind_static_data(pos);
+    pbo_.bind_static_data(0, pos);
 
-    display<T>(mode, sprite_size, pbo_.buffer());
+    display<T>(mode, sprite_size, pbo_.buffer(0));
 }
 
 void ParticleRenderer::_initGL() {
