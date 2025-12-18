@@ -11,7 +11,7 @@ add_library(${PROJECT_NAME}_params STATIC params.cpp)
 add_library(${PROJECT_NAME}_buffer_objects STATIC buffer_objects.cpp)
 
 add_library(${PROJECT_NAME}_randomise_bodies STATIC randomise_bodies.cpp)
-add_library(${PROJECT_NAME}_bodysystemcuda STATIC bodysystemcuda.cu bodysystemcuda.cpp bodysystemcuda_default.cu bodysystemcuda_host_memory.cpp unique_mapped_span.cpp bodysystemcuda_graphics.cu)
+add_library(${PROJECT_NAME}_bodysystemcuda STATIC bodysystemcuda.cu bodysystemcuda.cpp bodysystemcuda_default.cu bodysystemcuda_host_memory.cpp unique_mapped_span.cpp bodysystemcuda_graphics.cu cuda_opengl_buffers.cpp)
 add_library(${PROJECT_NAME}_bodysystemcpu STATIC bodysystemcpu.cpp)
 
 add_library(${PROJECT_NAME}_compute STATIC compute.cpp)

@@ -40,47 +40,30 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::initialize() ->
         pbos_ = BufferObjects<2>::create_dynamic(std::array{host_positions, host_positions});
     }
 
-    for (int i = 0; i < 2; ++i) {
-        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&graphics_resource_[i], pbos_.buffer(i), cudaGraphicsMapFlagsNone));
-    }
+    graphics_resources_ = CUDAOpenGLBuffers<2>(pbos_);
 
     device_vel_.resize(this->nb_bodies_ * 4, 0);
 }
 
-template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraphics() noexcept {
-    checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[0]));
-    checkCudaErrors(cudaGraphicsUnregisterResource(graphics_resource_[1]));
-}
+template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraphics() noexcept = default;
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaTime) -> void {
-    checkCudaErrors(cudaGraphicsResourceSetMapFlags(graphics_resource_[this->current_read_], cudaGraphicsMapFlagsReadOnly));
-    checkCudaErrors(cudaGraphicsResourceSetMapFlags(graphics_resource_[1 - this->current_read_], cudaGraphicsMapFlagsWriteDiscard));
-    checkCudaErrors(cudaGraphicsMapResources(2, graphics_resource_, 0));
-    size_t bytes;
-    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[this->current_read_]), &bytes, graphics_resource_[this->current_read_]));
-    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&(device_pos_[1 - this->current_read_]), &bytes, graphics_resource_[1 - this->current_read_]));
+    const auto device_mapping = graphics_resources_.map<T>(std::array{CUDAGraphicsFlag{this->current_read_, cudaGraphicsMapFlagsReadOnly}, CUDAGraphicsFlag{1 - this->current_read_, cudaGraphicsMapFlagsWriteDiscard}});
 
-    integrateNbodySystem<T>(device_pos_[1 - this->current_read_], device_pos_[this->current_read_], device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
+    const auto& position_ptrs = device_mapping.pointers();
 
-    checkCudaErrors(cudaGraphicsUnmapResources(2, graphics_resource_, 0));
+    integrateNbodySystem<T>(position_ptrs[1 - this->current_read_], position_ptrs[this->current_read_], device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
 
     std::swap(this->current_read_, this->current_write_);
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() const -> std::span<const T> {
-    const auto device_data = device_pos_[this->current_read_];
-
     {
-        auto pgres = graphics_resource_[this->current_read_];
+        const auto device_mapping = graphics_resources_.map<T>(CUDAGraphicsFlag{this->current_read_, cudaGraphicsMapFlagsReadOnly});
 
-        checkCudaErrors(cudaGraphicsResourceSetMapFlags(pgres, cudaGraphicsMapFlagsReadOnly));
-        checkCudaErrors(cudaGraphicsMapResources(1, &pgres, 0));
-        size_t bytes;
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void**)&device_data, &bytes, pgres));
+        const auto& device_data = device_mapping.pointers()[0];
 
         checkCudaErrors(cudaMemcpy(host_pos_.data(), device_data, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
-
-        checkCudaErrors(cudaGraphicsUnmapResources(1, &pgres, 0));
     }
 
     return host_pos_;

@@ -2,12 +2,11 @@
 
 #include "bodysystemcuda.hpp"
 #include "buffer_objects.hpp"
+#include "cuda_opengl_buffers.hpp"
 
 #include <thrust/device_vector.h>
 
 #include <array>
-
-struct cudaGraphicsResource;
 
 ///
 /// @brief  The CUDA implementation using OpenGL interop. Some GPU buffers are allocated by OpenGL.
@@ -37,11 +36,10 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
     mutable std::vector<T> host_vel_;
 
     // Device data
-    std::array<T*, 2>        device_pos_{nullptr, nullptr};
-    thrust::device_vector<T> device_vel_;
+    BufferObjects<2>             pbos_;
+    mutable CUDAOpenGLBuffers<2> graphics_resources_;
 
-    BufferObjects<2>      pbos_;
-    cudaGraphicsResource* graphics_resource_[2];
+    thrust::device_vector<T> device_vel_;
 };
 
 extern template BodySystemCUDAGraphics<float>;
