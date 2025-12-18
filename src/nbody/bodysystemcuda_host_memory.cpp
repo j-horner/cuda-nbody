@@ -8,30 +8,15 @@
 #include <cassert>
 
 template <std::floating_point T> BodySystemCUDAHostMemory<T>::BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
-    initialize();
-
     BodySystemCUDAHostMemory<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
 template <std::floating_point T>
 BodySystemCUDAHostMemory<T>::BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
     : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
-    assert(this->host_pos_vec_.size() == 4 * this->nb_bodies_);
-    assert(this->host_vel_vec_.size() == 4 * this->nb_bodies_);
-
-    initialize();
-
     set_position(this->host_pos_vec_);
     set_velocity(this->host_vel_vec_);
 }
-
-template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::initialize() -> void {
-    positions_[0] = UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0});
-    positions_[1] = UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0});
-    velocities_   = UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0});
-}
-
-template <std::floating_point T> BodySystemCUDAHostMemory<T>::~BodySystemCUDAHostMemory() noexcept = default;
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::update(T deltaTime) -> void {
     integrateNbodySystem<
@@ -48,6 +33,8 @@ template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::get_velocity(
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_position(std::span<const T> data) -> void {
+    assert(data.size() == 4 * this->nb_bodies_);
+
     this->current_read_  = 0;
     this->current_write_ = 1;
 
@@ -55,6 +42,8 @@ template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_position(
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::set_velocity(std::span<const T> data) -> void {
+    assert(data.size() == 4 * this->nb_bodies_);
+
     this->current_read_  = 0;
     this->current_write_ = 1;
 
