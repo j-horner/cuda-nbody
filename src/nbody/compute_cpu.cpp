@@ -61,7 +61,7 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCPU::s
     const auto new_pos = new_nbody.get_position();
     const auto new_vel = new_nbody.get_velocity();
 
-    for (int i = 0; i < nb_bodies_4; i++) {
+    for (auto i = 0u; i < nb_bodies_4; ++i) {
         new_pos[i] = static_cast<TNew>(old_pos[i]);
         new_vel[i] = static_cast<TNew>(old_vel[i]);
     }

@@ -87,14 +87,6 @@ template <> __device__ double getSofteningSquared<double>() {
     return softeningSquared_fp64;
 }
 
-/* template <typename T> struct DeviceData {
-    T*           pos[2];    // mapped host pointers
-    T*           vel;
-    cudaEvent_t  event;
-    unsigned int offset;
-    unsigned int nb_bodies;
-};*/
-
 template <std::floating_point T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
     vec3<T> r;
 
@@ -125,7 +117,7 @@ template <std::floating_point T> __device__ vec3<T> bodyBodyInteraction(vec3<T> 
 template <std::floating_point T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, const vec4<T>* positions, int numTiles, cg::thread_block cta) {
     vec4<T>* sharedPos = SharedMemory<vec4<T>>();
 
-    vec3<T> acc = {0.0f, 0.0f, 0.0f};
+    auto acc = vec3<T>{0, 0, 0};
 
     for (int tile = 0; tile < numTiles; tile++) {
         sharedPos[threadIdx.x] = positions[tile * blockDim.x + threadIdx.x];

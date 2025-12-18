@@ -170,7 +170,7 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCUDA::
     auto newPos = std::vector<TNew>(nb_bodies_4);
     auto newVel = std::vector<TNew>(nb_bodies_4);
 
-    for (int i = 0; i < nb_bodies_4; i++) {
+    for (auto i = 0u; i < nb_bodies_4; ++i) {
         newPos[i] = static_cast<TNew>(oldPos[i]);
         newVel[i] = static_cast<TNew>(oldVel[i]);
     }

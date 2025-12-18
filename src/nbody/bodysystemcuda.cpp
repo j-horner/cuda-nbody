@@ -55,7 +55,7 @@ BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize
 template <std::floating_point T>
 BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
     : nb_bodies_(nb_bodies), block_size_(blockSize), host_pos_vec_(std::move(positions)), host_vel_vec_(std::move(velocities)), damping_(params.damping) {
-    set_softening(params.softening);
+    set_softening(static_cast<T>(params.softening));
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams& params, NBodyConfig config) -> void {
@@ -65,7 +65,7 @@ template <std::floating_point T> auto BodySystemCUDA<T>::reset(const NBodyParams
 }
 
 template <std::floating_point T> auto BodySystemCUDA<T>::update_params(const NBodyParams& active_params) -> void {
-    set_softening(active_params.softening);
+    set_softening(static_cast<T>(active_params.softening));
     damping_ = active_params.damping;
 }
 
