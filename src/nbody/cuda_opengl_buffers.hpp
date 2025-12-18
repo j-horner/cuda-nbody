@@ -15,11 +15,7 @@ struct CUDAGraphicsFlag {
 };
 
 template <std::size_t N> class CUDAOpenGLBuffers {
-    template <typename T, std::size_t K> class MappedPointers;
-
  public:
-    CUDAOpenGLBuffers() = default;
-
     explicit CUDAOpenGLBuffers(const BufferObjects<N>& buffers);
 
     CUDAOpenGLBuffers(const CUDAOpenGLBuffers&) = delete;

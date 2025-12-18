@@ -26,20 +26,18 @@ template <std::floating_point T> class BodySystemCUDAGraphics : public BodySyste
 
     auto getCurrentReadBuffer() const noexcept { return pbos_.use(BodySystemCUDA<T>::current_read_); }
 
-    ~BodySystemCUDAGraphics() noexcept;
+    ~BodySystemCUDAGraphics() noexcept final = default;
 
  private:
-    auto initialize() -> void;
-
     // Host data
-    mutable std::vector<T> host_pos_;
-    mutable std::vector<T> host_vel_;
+    mutable std::vector<T> host_pos_ = std::vector<T>(4 * this->nb_bodies_, T{0});
+    mutable std::vector<T> host_vel_ = std::vector<T>(4 * this->nb_bodies_, T{0});
 
     // Device data
-    BufferObjects<2>             pbos_;
-    mutable CUDAOpenGLBuffers<2> graphics_resources_;
+    BufferObjects<2>             pbos_               = BufferObjects<2>::create_dynamic(std::array<std::span<const T>, 2>{host_pos_, host_pos_});
+    mutable CUDAOpenGLBuffers<2> graphics_resources_ = CUDAOpenGLBuffers<2>{pbos_};
 
-    thrust::device_vector<T> device_vel_;
+    thrust::device_vector<T> device_vel_ = thrust::device_vector<T>(4 * this->nb_bodies_, T{0});
 };
 
 extern template BodySystemCUDAGraphics<float>;

@@ -9,50 +9,24 @@
 #include <cassert>
 
 template <std::floating_point T> BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
-    initialize();
-
     BodySystemCUDAGraphics<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
 template <std::floating_point T>
 BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
     : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
-    assert(this->host_pos_vec_.size() == 4 * this->nb_bodies_);
-    assert(this->host_vel_vec_.size() == 4 * this->nb_bodies_);
-
-    initialize();
-
     set_position(this->host_pos_vec_);
     set_velocity(this->host_vel_vec_);
 }
 
-template <std::floating_point T> auto BodySystemCUDAGraphics<T>::initialize() -> void {
-    const auto memSize = sizeof(T) * 4 * this->nb_bodies_;
-
-    host_pos_.resize(this->nb_bodies_ * 4, 0);
-    host_vel_.resize(this->nb_bodies_ * 4, 0);
-
-    // create the position pixel buffer objects for rendering
-    // we will actually compute directly from this memory in CUDA too
-    {
-        const auto host_positions = std::span<const T>{host_pos_};
-
-        pbos_ = BufferObjects<2>::create_dynamic(std::array{host_positions, host_positions});
-    }
-
-    graphics_resources_ = CUDAOpenGLBuffers<2>(pbos_);
-
-    device_vel_.resize(this->nb_bodies_ * 4, 0);
-}
-
-template <std::floating_point T> BodySystemCUDAGraphics<T>::~BodySystemCUDAGraphics() noexcept = default;
-
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaTime) -> void {
-    const auto device_mapping = graphics_resources_.map<T>(std::array{CUDAGraphicsFlag{this->current_read_, cudaGraphicsMapFlagsReadOnly}, CUDAGraphicsFlag{1 - this->current_read_, cudaGraphicsMapFlagsWriteDiscard}});
+    {
+        const auto device_mapping = graphics_resources_.map<T>(std::array{CUDAGraphicsFlag{this->current_read_, cudaGraphicsMapFlagsReadOnly}, CUDAGraphicsFlag{1 - this->current_read_, cudaGraphicsMapFlagsWriteDiscard}});
 
-    const auto& position_ptrs = device_mapping.pointers();
+        const auto& position_ptrs = device_mapping.pointers();
 
-    integrateNbodySystem<T>(position_ptrs[1 - this->current_read_], position_ptrs[this->current_read_], device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
+        integrateNbodySystem<T>(position_ptrs[1 - this->current_read_], position_ptrs[this->current_read_], device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
+    }
 
     std::swap(this->current_read_, this->current_write_);
 }
@@ -75,6 +49,8 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_velocity() 
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_position(std::span<const T> data) -> void {
+    assert(data.size() == 4 * this->nb_bodies_);
+
     this->current_read_  = 0;
     this->current_write_ = 1;
 
@@ -82,6 +58,8 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_position(st
 }
 
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::set_velocity(std::span<const T> data) -> void {
+    assert(data.size() == 4 * this->nb_bodies_);
+
     this->current_read_  = 0;
     this->current_write_ = 1;
 
