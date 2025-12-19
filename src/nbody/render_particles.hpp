@@ -52,7 +52,7 @@ class ParticleRenderer {
     void _initGL();
     void _createTexture();
 
-    template <std::floating_point T> auto draw_points(bool color, const BufferObject& pbo) -> void;
+    template <std::floating_point T, bool UseColour> auto draw_points() -> void;
 
     std::vector<float> colour_;
 

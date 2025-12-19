@@ -26,6 +26,12 @@ class Compute {
             std::size_t                  nb_bodies,
             const std::filesystem::path& tipsy_file);
 
+    Compute(const Compute&) = delete;
+    Compute(Compute&&) noexcept;
+
+    auto operator=(const Compute&) -> Compute& = delete;
+    auto operator=(Compute&&) noexcept -> Compute&;
+
     auto nb_bodies() const noexcept { return num_bodies_; }
 
     auto& active_params() const noexcept { return active_params_; }

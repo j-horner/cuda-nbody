@@ -25,7 +25,7 @@ auto Interface::display(Compute& compute, Camera& camera) -> void {
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (display_enabled) {
+    if (display_enabled_) {
         camera.view_transform();
 
         compute.display_NBody_system(*this);

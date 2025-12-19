@@ -5,27 +5,22 @@
 #include "gl_includes.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 
 #include <cassert>
 
 BufferObject::BufferObject(unsigned int buffer_idx) : buffer_(buffer_idx), current_buffer_(current_buffer()) {
     glBindBuffer(GL_ARRAY_BUFFER, buffer_);
-    // check_OpenGL_error();
 }
 
 BufferObject ::~BufferObject() noexcept {
     glBindBuffer(GL_ARRAY_BUFFER, current_buffer_);
-    // check_OpenGL_error();
 }
 
 auto BufferObject::current_buffer() noexcept -> unsigned int {
-    // check_OpenGL_error();
-
     auto buffer = GLint{-1};
 
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &buffer);
-
-    // check_OpenGL_error();
 
     return static_cast<unsigned int>(buffer);
 }
@@ -36,7 +31,6 @@ auto BufferObject::bind(unsigned int buffer) noexcept -> void {
 
 template <std::size_t N> BufferObjects<N>::BufferObjects() noexcept {
     glGenBuffers(N, reinterpret_cast<GLuint*>(buffers_.data()));
-    // check_OpenGL_error();
     assert(!std::ranges::contains(buffers_, 0u));
 }
 
@@ -57,7 +51,6 @@ template <std::size_t N> BufferObjects<N>::~BufferObjects() noexcept {
         assert(!std::ranges::contains(buffers_, BufferObject::current_buffer()));
 
         glDeleteBuffers(N, reinterpret_cast<GLuint*>(buffers_.data()));
-        // check_OpenGL_error();
     } else {
         constexpr auto zeros = std::array<unsigned int, N>{{{}}};
         assert(buffers_ == zeros);
@@ -77,8 +70,6 @@ template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>:
     if (static_cast<std::size_t>(size) != memory_size) {
         throw std::runtime_error("Pixel Buffer Object allocation failed!n");
     }
-
-    // check_OpenGL_error();
 }
 template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::allocate_and_bind_dynamic_data(std::size_t k, std::span<const T> data) -> void {
     [[maybe_unused]] const auto buffer = use(k);
@@ -93,7 +84,6 @@ template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>:
     if (static_cast<std::size_t>(size) != memory_size) {
         throw std::runtime_error("Pixel Buffer Object allocation failed!n");
     }
-    // check_OpenGL_error();
 }
 
 template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>::bind_data(std::size_t k, std::span<const T> data) -> void {
@@ -109,8 +99,6 @@ template <std::size_t N> template <std::floating_point T> auto BufferObjects<N>:
     if (static_cast<std::size_t>(size) != memory_size) {
         throw std::runtime_error("Pixel Buffer Object allocation failed!n");
     }
-
-    // check_OpenGL_error();
 }
 
 template BufferObjects<1>;

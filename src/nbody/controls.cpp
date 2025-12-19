@@ -72,7 +72,7 @@ auto Controls::motion(int x, int y, const Interface& interface, Camera& camera, 
     glutPostRedisplay();
 }
 
-auto Controls::keyboard(unsigned char key, [[maybe_unused]] int x, [[maybe_unused]] int y, Compute& compute, Interface& interface, Camera& camera) -> void {
+auto Controls::keyboard(unsigned char key, [[maybe_unused]] int x, [[maybe_unused]] int y, Compute& compute, Interface& interface, Camera& camera) -> bool {
     using enum NBodyConfig;
 
     switch (key) {
@@ -83,8 +83,11 @@ auto Controls::keyboard(unsigned char key, [[maybe_unused]] int x, [[maybe_unuse
         case 27:    // escape
         case 'q':
         case 'Q':
-            glutLeaveMainLoop();
-            break;
+            {
+                assert(glGetError() == GL_NO_ERROR);
+                glutLeaveMainLoop();
+                return true;
+            }
 
         case 13:    // return
             compute.switch_precision();
@@ -141,4 +144,6 @@ auto Controls::keyboard(unsigned char key, [[maybe_unused]] int x, [[maybe_unuse
     }
 
     glutPostRedisplay();
+
+    return false;
 }

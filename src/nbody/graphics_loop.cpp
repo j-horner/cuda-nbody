@@ -17,6 +17,8 @@
 #include <tuple>
 #include <type_traits>
 
+#include <cassert>
+
 // get the parameter list of a lambda (with some minor fixes): https://stackoverflow.com/a/70954691
 template <typename T> struct Signature;
 template <typename C, typename... Args> struct Signature<void (C::*)(Args...) const> {
@@ -59,7 +61,23 @@ template <auto GLUTFunction, typename F> auto register_callback(F& func) -> void
 }
 
 auto execute_graphics_loop(Compute& compute, Interface& interface, Camera& camera, Controls& controls) -> void {
-    auto display_ = [&]() { interface.display(compute, camera); };
+    //
+    // Upon exiting, GLUT invokes the display callback one more time and then shuts down OpenGL (so it could be reinitialised) after the main loop has stopped.
+    // Any cleanup of objects containing OpenGL state (i.e. destructors invoking OpenGL functions) must be done before OpenGL is de-initialised, i.e. inside this loop.
+    // This means Interface and Compute need to run their cleanup in the final display callback invocation.
+    // This is done by simply moving them into temporary objects.
+    //
+
+    auto stopped = false;
+
+    auto display_ = [&]() {
+        if (stopped) {
+            [[maybe_unused]] const auto destroyed_compute   = std::move(compute);
+            [[maybe_unused]] const auto destroyed_interface = std::move(interface);
+            return;
+        }
+        interface.display(compute, camera);
+    };
 
     auto reshape_ = [](int w, int h) {
         glMatrixMode(GL_PROJECTION);
@@ -72,7 +90,7 @@ auto execute_graphics_loop(Compute& compute, Interface& interface, Camera& camer
 
     auto mouse_    = [&](int button, int state, int x, int y) { controls.mouse(button, state, x, y, interface, compute); };
     auto motion_   = [&](int x, int y) { controls.motion(x, y, interface, camera, compute); };
-    auto keyboard_ = [&](unsigned char k, int x, int y) { Controls::keyboard(k, x, y, compute, interface, camera); };
+    auto keyboard_ = [&](unsigned char k, int x, int y) { stopped = Controls::keyboard(k, x, y, compute, interface, camera); };
 
     // The special keyboard callback is triggered when keyboard function or directional keys are pressed.
     auto special_ = [&](int key, int x, int y) { interface.special(key, x, y); };
@@ -91,9 +109,9 @@ auto execute_graphics_loop(Compute& compute, Interface& interface, Camera& camer
 
     glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS);
 
+    assert(glGetError() == GL_NO_ERROR);
+
     glutMainLoop();
-    // TODO: something is triggering an error once the main loop exits
-    // if (false == sdkCheckErrorGL(__FILE__, __LINE__)) {
-    //     std::exit(EXIT_FAILURE);
-    // }
+
+    // at this point, no more OpenGL functions may be called
 }

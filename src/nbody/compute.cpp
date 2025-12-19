@@ -18,6 +18,10 @@ constexpr auto flops_per_interaction(bool fp64_enabled) {
 }
 }    // namespace
 
+Compute::Compute(Compute&&) noexcept = default;
+
+auto Compute::operator=(Compute&&) noexcept -> Compute& = default;
+
 Compute::~Compute() noexcept = default;
 
 Compute::Compute(bool                         enable_fp64,

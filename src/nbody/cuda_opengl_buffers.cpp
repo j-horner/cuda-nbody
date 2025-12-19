@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include <cassert>
+
 template <std::size_t N> CUDAOpenGLBuffers<N>::CUDAOpenGLBuffers(const BufferObjects<N>& buffers) {
     for (auto i = 0; i < N; ++i) {
         const auto result = cudaGraphicsGLRegisterBuffer(&(resources_[i]), buffers.buffer(i), cudaGraphicsMapFlagsNone);
