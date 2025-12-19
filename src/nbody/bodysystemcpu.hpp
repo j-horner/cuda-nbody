@@ -66,7 +66,7 @@ template <std::floating_point T> class BodySystemCPU {
 
     std::vector<T> pos_;
     std::vector<T> vel_;
-    std::vector<T> force_ = std::vector(nb_bodies_ * 3, T{0.f});
+    std::vector<T> accel_ = std::vector(nb_bodies_ * 3, T{0.f});
 
     T softening_squared_ = 0.00125f;
     T damping_           = 0.995f;

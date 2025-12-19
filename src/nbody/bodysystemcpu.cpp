@@ -100,7 +100,7 @@ template <std::floating_point T> auto interaction(T accel[3], const T pos_mass_0
 template <std::floating_point T> auto BodySystemCPU<T>::calculate_force() noexcept -> void {
 #pragma omp                           parallel for
     for (int i = 0; i < nb_bodies_; i++) {
-        int indexForce = 3 * i;
+        int index_accel = 3 * i;
 
         T acc[3] = {0, 0, 0};
 
@@ -118,9 +118,9 @@ template <std::floating_point T> auto BodySystemCPU<T>::calculate_force() noexce
             j++;
         }
 
-        force_[indexForce]     = acc[0];
-        force_[indexForce + 1] = acc[1];
-        force_[indexForce + 2] = acc[2];
+        accel_[index_accel]     = acc[0];
+        accel_[index_accel + 1] = acc[1];
+        accel_[index_accel + 2] = acc[2];
     }
 }
 
@@ -130,28 +130,27 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
 #pragma omp parallel for
 
     for (int i = 0; i < nb_bodies_; ++i) {
-        int index      = 4 * i;
-        int indexForce = 3 * i;
+        int index       = 4 * i;
+        int index_accel = 3 * i;
 
-        T pos[3], vel[3], force[3];
-        pos[0]    = pos_[index + 0];
-        pos[1]    = pos_[index + 1];
-        pos[2]    = pos_[index + 2];
-        T invMass = pos_[index + 3];
+        T pos[3], vel[3], accel[3];
+        pos[0] = pos_[index + 0];
+        pos[1] = pos_[index + 1];
+        pos[2] = pos_[index + 2];
 
         vel[0] = vel_[index + 0];
         vel[1] = vel_[index + 1];
         vel[2] = vel_[index + 2];
 
-        force[0] = force_[indexForce + 0];
-        force[1] = force_[indexForce + 1];
-        force[2] = force_[indexForce + 2];
+        accel[0] = accel_[index_accel + 0];
+        accel[1] = accel_[index_accel + 1];
+        accel[2] = accel_[index_accel + 2];
 
-        // acceleration = force / mass;
+        // acceleration = accel / mass;
         // new velocity = old velocity + acceleration * dt
-        vel[0] += (force[0] * invMass) * dt;
-        vel[1] += (force[1] * invMass) * dt;
-        vel[2] += (force[2] * invMass) * dt;
+        vel[0] += accel[0] * dt;
+        vel[1] += accel[1] * dt;
+        vel[2] += accel[2] * dt;
 
         vel[0] *= damping_;
         vel[1] *= damping_;
