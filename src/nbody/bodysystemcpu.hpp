@@ -29,7 +29,6 @@
 
 #include "nbody_config.hpp"
 
-#include <filesystem>
 #include <span>
 #include <vector>
 
