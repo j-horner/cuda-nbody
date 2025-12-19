@@ -46,7 +46,7 @@ template <std::floating_point T> class BodySystemCPU {
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
-    auto update(T deltaTime) noexcept -> void;
+    auto update(T dt) noexcept -> void;
 
     auto update_params(const NBodyParams& active_params) noexcept -> void;
 
@@ -60,9 +60,7 @@ template <std::floating_point T> class BodySystemCPU {
     auto set_velocity(std::span<const T> data) noexcept -> void;
 
  private:
-    auto setSoftening(T softening) noexcept -> void { softening_squared_ = softening * softening; }
-
-    auto _computeNBodyGravitation() noexcept -> void;
+    auto calculate_force() noexcept -> void;
 
     std::size_t nb_bodies_;
 
