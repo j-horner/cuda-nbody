@@ -1,6 +1,5 @@
 #include "bodysystemcuda_host_memory.hpp"
 
-#include "helper_cuda.hpp"
 #include "integrate_nbody_cuda.hpp"
 
 #include <algorithm>

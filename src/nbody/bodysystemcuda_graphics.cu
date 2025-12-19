@@ -1,10 +1,11 @@
 #include "bodysystemcuda_graphics.hpp"
 #include "gl_includes.hpp"
-#include "helper_cuda.hpp"
 #include "integrate_nbody_cuda.hpp"
 
 #include <cuda_gl_interop.h>
 #include <thrust/copy.h>
+
+#include <stdexcept>
 
 #include <cassert>
 
@@ -37,7 +38,11 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::get_position() 
 
         const auto& device_data = device_mapping.pointers()[0];
 
-        checkCudaErrors(cudaMemcpy(host_pos_.data(), device_data, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost));
+        const auto result = cudaMemcpy(host_pos_.data(), device_data, this->nb_bodies_ * 4 * sizeof(T), cudaMemcpyDeviceToHost);
+
+        if (result != cudaSuccess) {
+            throw std::runtime_error(cudaGetErrorName(result));
+        }
     }
 
     return host_pos_;

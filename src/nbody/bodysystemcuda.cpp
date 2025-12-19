@@ -29,21 +29,20 @@
 
 #include "bodysystemcuda.hpp"
 
-#include "helper_cuda.hpp"
 #include "params.hpp"
 #include "randomise_bodies.hpp"
 
 #include <vector>
 
-cudaError_t setSofteningSquared(float softeningSq);
-cudaError_t setSofteningSquared(double softeningSq);
+auto set_softening_squared(float softeningSq) -> void;
+auto set_softening_squared(double softeningSq) -> void;
 
 namespace {
 
 template <std::floating_point T> auto set_softening(T softening) -> void {
-    const auto softeningSq = softening * softening;
+    const auto softening2 = softening * softening;
 
-    checkCudaErrors(setSofteningSquared(softeningSq));
+    set_softening_squared(softening2);
 }
 
 }    // namespace

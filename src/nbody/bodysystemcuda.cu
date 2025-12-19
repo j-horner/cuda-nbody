@@ -25,7 +25,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "helper_cuda.hpp"
 #include "vec.hpp"
 
 // CUDA standard includes
@@ -35,6 +34,7 @@
 
 #include <concepts>
 #include <span>
+#include <stdexcept>
 
 #include <cmath>
 
@@ -43,12 +43,20 @@ namespace cg = cooperative_groups;
 __constant__ float  softeningSquared;
 __constant__ double softeningSquared_fp64;
 
-cudaError_t setSofteningSquared(float softeningSq) {
-    return cudaMemcpyToSymbol(softeningSquared, &softeningSq, sizeof(float), 0, cudaMemcpyHostToDevice);
+auto set_softening_squared(float softeningSq) -> void {
+    const auto result = cudaMemcpyToSymbol(softeningSquared, &softeningSq, sizeof(float), 0, cudaMemcpyHostToDevice);
+
+    if (result != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorName(result));
+    }
 }
 
-cudaError_t setSofteningSquared(double softeningSq) {
-    return cudaMemcpyToSymbol(softeningSquared_fp64, &softeningSq, sizeof(double), 0, cudaMemcpyHostToDevice);
+auto set_softening_squared(double softeningSq) -> void {
+    const auto result = cudaMemcpyToSymbol(softeningSquared_fp64, &softeningSq, sizeof(double), 0, cudaMemcpyHostToDevice);
+
+    if (result != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorName(result));
+    }
 }
 
 template <typename T> struct SharedMemory {

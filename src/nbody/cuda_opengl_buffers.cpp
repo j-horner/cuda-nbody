@@ -2,15 +2,20 @@
 
 #include "buffer_objects.hpp"
 #include "gl_includes.hpp"
-#include "helper_cuda.hpp"
 
 #include <cuda_gl_interop.h>
 
 #include <algorithm>
+#include <stdexcept>
 
 template <std::size_t N> CUDAOpenGLBuffers<N>::CUDAOpenGLBuffers(const BufferObjects<N>& buffers) {
     for (auto i = 0; i < N; ++i) {
-        checkCudaErrors(cudaGraphicsGLRegisterBuffer(&(resources_[i]), buffers.buffer(i), cudaGraphicsMapFlagsNone));
+        const auto result = cudaGraphicsGLRegisterBuffer(&(resources_[i]), buffers.buffer(i), cudaGraphicsMapFlagsNone);
+
+        if (result != cudaSuccess) {
+            throw std::runtime_error(cudaGetErrorName(result));
+        }
+
         assert(resources_[i] != nullptr);
     }
 }
@@ -28,14 +33,25 @@ template <std::size_t N> auto CUDAOpenGLBuffers<N>::unregister() noexcept -> voi
     if (resources_[0] != nullptr) {
         for (auto i = 0; i < N; ++i) {
             assert(resources_[i] != nullptr);
-            checkCudaErrors(cudaGraphicsUnregisterResource(resources_[i]));
+            [[maybe_unused]] const auto result = cudaGraphicsUnregisterResource(resources_[i]);
+            assert(result == cudaSuccess);
         }
     }
 }
 
 template <std::size_t N> template <typename T, std::size_t K> CUDAOpenGLBuffers<N>::MappedPointers<T, K>::MappedPointers(const std::array<CUDAGraphicsFlag, K>& flags, std::array<cudaGraphicsResource*, N>& resources) {
+    auto result = cudaSuccess;
+
+    auto check_cuda_errors = [&] {
+        if (result != cudaSuccess) {
+            throw std::runtime_error(cudaGetErrorName(result));
+        }
+    };
+
     for (const auto& [idx, flag] : flags) {
-        checkCudaErrors(cudaGraphicsResourceSetMapFlags(resources[idx], flag));
+        result = cudaGraphicsResourceSetMapFlags(resources[idx], flag);
+
+        check_cuda_errors();
     }
 
     if constexpr (K == 1) {
@@ -44,21 +60,26 @@ template <std::size_t N> template <typename T, std::size_t K> CUDAOpenGLBuffers<
         resources_begin_ = resources.data();
     }
 
-    checkCudaErrors(cudaGraphicsMapResources(K, resources_begin_, 0));
+    result = cudaGraphicsMapResources(K, resources_begin_, 0);
+
+    check_cuda_errors();
 
     size_t bytes;
 
     if constexpr (K == 1) {
-        checkCudaErrors(cudaGraphicsResourceGetMappedPointer(reinterpret_cast<void**>(ptrs_.data()), &bytes, *resources_begin_));
+        result = cudaGraphicsResourceGetMappedPointer(reinterpret_cast<void**>(ptrs_.data()), &bytes, *resources_begin_);
+        check_cuda_errors();
     } else {
         for (auto k = 0u; k < K; ++k) {
-            checkCudaErrors(cudaGraphicsResourceGetMappedPointer(reinterpret_cast<void**>(ptrs_.data() + k), &bytes, resources[k]));
+            result = cudaGraphicsResourceGetMappedPointer(reinterpret_cast<void**>(ptrs_.data() + k), &bytes, resources[k]);
+            check_cuda_errors();
         }
     }
 }
 
 template <std::size_t N> template <typename T, std::size_t K> CUDAOpenGLBuffers<N>::MappedPointers<T, K>::~MappedPointers() noexcept {
-    checkCudaErrors(cudaGraphicsUnmapResources(K, resources_begin_, 0));
+    [[maybe_unused]] const auto result = cudaGraphicsUnmapResources(K, resources_begin_, 0);
+    assert(result == cudaSuccess);
 }
 
 template class CUDAOpenGLBuffers<2>;
