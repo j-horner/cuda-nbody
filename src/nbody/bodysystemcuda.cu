@@ -25,7 +25,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "helper_cuda.hpp"
 #include "vec.hpp"
 
 // CUDA standard includes
@@ -35,6 +34,7 @@
 
 #include <concepts>
 #include <span>
+#include <stdexcept>
 
 #include <cmath>
 
@@ -43,12 +43,20 @@ namespace cg = cooperative_groups;
 __constant__ float  softeningSquared;
 __constant__ double softeningSquared_fp64;
 
-cudaError_t setSofteningSquared(float softeningSq) {
-    return cudaMemcpyToSymbol(softeningSquared, &softeningSq, sizeof(float), 0, cudaMemcpyHostToDevice);
+auto set_softening_squared(float softeningSq) -> void {
+    const auto result = cudaMemcpyToSymbol(softeningSquared, &softeningSq, sizeof(float), 0, cudaMemcpyHostToDevice);
+
+    if (result != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorName(result));
+    }
 }
 
-cudaError_t setSofteningSquared(double softeningSq) {
-    return cudaMemcpyToSymbol(softeningSquared_fp64, &softeningSq, sizeof(double), 0, cudaMemcpyHostToDevice);
+auto set_softening_squared(double softeningSq) -> void {
+    const auto result = cudaMemcpyToSymbol(softeningSquared_fp64, &softeningSq, sizeof(double), 0, cudaMemcpyHostToDevice);
+
+    if (result != cudaSuccess) {
+        throw std::runtime_error(cudaGetErrorName(result));
+    }
 }
 
 template <typename T> struct SharedMemory {
@@ -87,14 +95,6 @@ template <> __device__ double getSofteningSquared<double>() {
     return softeningSquared_fp64;
 }
 
-/* template <typename T> struct DeviceData {
-    T*           pos[2];    // mapped host pointers
-    T*           vel;
-    cudaEvent_t  event;
-    unsigned int offset;
-    unsigned int nb_bodies;
-};*/
-
 template <std::floating_point T> __device__ vec3<T> bodyBodyInteraction(vec3<T> ai, vec4<T> bi, vec4<T> bj) {
     vec3<T> r;
 
@@ -125,7 +125,7 @@ template <std::floating_point T> __device__ vec3<T> bodyBodyInteraction(vec3<T> 
 template <std::floating_point T> __device__ vec3<T> computeBodyAccel(vec4<T> bodyPos, const vec4<T>* positions, int numTiles, cg::thread_block cta) {
     vec4<T>* sharedPos = SharedMemory<vec4<T>>();
 
-    vec3<T> acc = {0.0f, 0.0f, 0.0f};
+    auto acc = vec3<T>{0, 0, 0};
 
     for (int tile = 0; tile < numTiles; tile++) {
         sharedPos[threadIdx.x] = positions[tile * blockDim.x + threadIdx.x];

@@ -32,8 +32,10 @@ class Controls {
     /// @param compute
     /// @param
     /// @param camera
-    /// @return
-    static auto keyboard(unsigned char key, int x, int y, Compute& compute, Interface& interface, Camera& camera) -> void;
+    ///
+    /// @return bool    Indicates if the program is terminating.
+    ///
+    static auto keyboard(unsigned char key, int x, int y, Compute& compute, Interface& interface, Camera& camera) -> bool;
 
  private:
     auto move_camera(Camera& camera, int x, int y) noexcept -> void;

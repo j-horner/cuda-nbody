@@ -111,6 +111,102 @@ auto isGLVersionSupported(unsigned reqMajor, unsigned reqMinor) -> bool {
     return major > reqMajor || (major == reqMajor && minor >= reqMinor);
 }
 
+constexpr auto openGL_source_to_string(GLenum source) -> std::string_view {
+    switch (source) {
+        case GL_DEBUG_SOURCE_API:
+            return "GL_DEBUG_SOURCE_API";
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+            return "GL_DEBUG_SOURCE_WINDOW_SYSTEM ";
+        case GL_DEBUG_SOURCE_SHADER_COMPILER:
+            return "GL_DEBUG_SOURCE_SHADER_COMPILER";
+        case GL_DEBUG_SOURCE_THIRD_PARTY:
+            return "GL_DEBUG_SOURCE_THIRD_PARTY";
+        case GL_DEBUG_SOURCE_APPLICATION:
+            return "GL_DEBUG_SOURCE_APPLICATION";
+        case GL_DEBUG_SOURCE_OTHER:
+            return "GL_DEBUG_SOURCE_OTHER";
+        default:
+            return "*UNKNOWN*";
+    }
+}
+
+constexpr auto openGL_type_to_string(GLenum type) -> std::string_view {
+    switch (type) {
+        case GL_DEBUG_TYPE_ERROR:
+            return "GL_DEBUG_TYPE_ERROR";
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+            return "GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR ";
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+            return "GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR";
+        case GL_DEBUG_TYPE_PORTABILITY:
+            return "GL_DEBUG_TYPE_PORTABILITY";
+        case GL_DEBUG_TYPE_PERFORMANCE:
+            return "GL_DEBUG_TYPE_PERFORMANCE";
+        case GL_DEBUG_TYPE_MARKER:
+            return "GL_DEBUG_TYPE_MARKER";
+        case GL_DEBUG_TYPE_PUSH_GROUP:
+            return "GL_DEBUG_TYPE_PUSH_GROUP";
+        case GL_DEBUG_TYPE_POP_GROUP:
+            return "GL_DEBUG_TYPE_POP_GROUP";
+        case GL_DEBUG_TYPE_OTHER:
+            return "GL_DEBUG_TYPE_OTHER";
+        default:
+            return "*UNKNOWN*";
+    }
+}
+
+constexpr auto openGL_severity_to_string(GLenum severity) -> std::string_view {
+    switch (severity) {
+        case GL_DEBUG_SEVERITY_HIGH:
+            return "GL_DEBUG_SEVERITY_HIGH";
+        case GL_DEBUG_SEVERITY_MEDIUM:
+            return "GL_DEBUG_SEVERITY_MEDIUM ";
+        case GL_DEBUG_SEVERITY_LOW:
+            return "GL_DEBUG_SEVERITY_LOW";
+        case GL_DEBUG_SEVERITY_NOTIFICATION:
+            return "GL_DEBUG_SEVERITY_NOTIFICATION";
+        default:
+            return "*UNKNOWN*";
+    }
+}
+
+constexpr auto openGL_error_to_string(GLenum err) -> std::string_view {
+    switch (err) {
+        case GL_NO_ERROR:
+            return "GL_NO_ERROR";
+        case GL_INVALID_ENUM:
+            return "GL_INVALID_ENUM";
+        case GL_INVALID_VALUE:
+            return "GL_INVALID_VALUE";
+        case GL_INVALID_OPERATION:
+            return "GL_INVALID_OPERATION";
+        case GL_OUT_OF_MEMORY:
+            return "GL_OUT_OF_MEMORY";
+        case GL_STACK_UNDERFLOW:
+            return "GL_STACK_UNDERFLOW";
+        case GL_STACK_OVERFLOW:
+            return "GL_STACK_OVERFLOW";
+        case GL_INVALID_FRAMEBUFFER_OPERATION:
+            return "GL_INVALID_FRAMEBUFFER_OPERATION";
+        default:
+            return "*UNKNOWN*";
+    }
+}
+
+auto GLAPIENTRY openGL_message_callback(GLenum source, GLenum type, [[maybe_unused]] GLuint id, GLenum severity, [[maybe_unused]] GLsizei length, const GLchar* message, [[maybe_unused]] const void* user_param) -> void {
+    // fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n", (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""), type, severity, message);
+    if (type == GL_DEBUG_TYPE_ERROR) {
+        std::println(stderr,
+                     "GL CALLBACK: ** GL ERROR ** source = {}, type = {}, severity = {}, id = {}, message = {}",
+                     openGL_source_to_string(source),
+                     openGL_type_to_string(type),
+                     openGL_severity_to_string(severity),
+                     id,
+                     message);
+    }
+    // std::println("GL CALLBACK: source = {}, type = {}, severity = {}, id = {}, message = {}", openGL_source_to_string(source), openGL_type_to_string(type), openGL_severity_to_string(severity), id, message);
+}
+
 auto initGL(int* argc, char** argv, bool full_screen) -> void {
     // First initialize OpenGL context, so we can properly set the GL for CUDA.
     // This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
@@ -133,6 +229,9 @@ auto initGL(int* argc, char** argv, bool full_screen) -> void {
 #endif
     }
 
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(openGL_message_callback, nullptr);
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.0, 0.0, 0.0, 1.0);
 

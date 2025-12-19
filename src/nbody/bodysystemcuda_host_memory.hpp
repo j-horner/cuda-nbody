@@ -3,6 +3,7 @@
 #include "bodysystemcuda.hpp"
 #include "unique_mapped_span.hpp"
 
+#include <array>
 #include <concepts>
 
 ///
@@ -21,13 +22,11 @@ template <std::floating_point T> class BodySystemCUDAHostMemory : public BodySys
     auto set_position(std::span<const T> data) -> void final;
     auto set_velocity(std::span<const T> data) -> void final;
 
-    ~BodySystemCUDAHostMemory() noexcept;
+    ~BodySystemCUDAHostMemory() noexcept final = default;
 
  private:
-    auto _initialize() -> void;
-
-    std::array<UniqueMappedSpan<T>, 2> positions_;
-    UniqueMappedSpan<T>                velocities_;
+    std::array<UniqueMappedSpan<T>, 2> positions_{UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0}), UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0})};
+    UniqueMappedSpan<T>                velocities_ = UniqueMappedSpan<T>(4 * this->nb_bodies_, T{0});
 };
 
 extern template BodySystemCUDAHostMemory<float>;

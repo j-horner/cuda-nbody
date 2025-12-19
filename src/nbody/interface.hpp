@@ -7,6 +7,7 @@
 
 class Camera;
 class Compute;
+class BufferObject;
 
 class Interface {
  public:
@@ -15,7 +16,7 @@ class Interface {
     auto toggle_sliders() noexcept -> void { show_sliders_ = !show_sliders_; }
     auto toggle_interactions() noexcept -> void { display_interactions_ = !display_interactions_; }
     auto cycle_display_mode() noexcept -> void { display_mode_ = (ParticleRenderer::DisplayMode)((display_mode_ + 1) % ParticleRenderer::PARTICLE_NUM_MODES); }
-    auto togle_display() noexcept -> void { display_enabled = !display_enabled; }
+    auto togle_display() noexcept -> void { display_enabled_ = !display_enabled_; }
 
     auto display(Compute& compute, Camera& camera) -> void;
 
@@ -33,11 +34,11 @@ class Interface {
     auto display_nbody_system(std::span<const float> positions) -> void;
     auto display_nbody_system(std::span<const double> positions) -> void;
 
-    auto display_nbody_system_fp32(unsigned int pbo) -> void;
-    auto display_nbody_system_fp64(unsigned int pbo) -> void;
+    auto display_nbody_system_fp32(const BufferObject& pbo) -> void;
+    auto display_nbody_system_fp64(const BufferObject& pbo) -> void;
 
  private:
-    bool                          display_enabled = true;
+    bool                          display_enabled_ = true;
     bool                          show_sliders_;
     ParamListGL                   param_list_;
     bool                          full_screen_;

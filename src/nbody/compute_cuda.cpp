@@ -3,8 +3,8 @@
 #include "bodysystemcpu.hpp"
 #include "bodysystemcuda.hpp"
 #include "bodysystemcuda_default.hpp"
+#include "bodysystemcuda_graphics.hpp"
 #include "bodysystemcuda_host_memory.hpp"
-#include "helper_cuda.hpp"
 #include "interface.hpp"
 
 #include <cuda/api.hpp>
@@ -136,6 +136,10 @@ ComputeCUDA::ComputeCUDA(
 
     if (use_pbo_) {
         allocate_nbody.template operator()<BodySystemCUDAGraphics>();
+
+        nbody_fp32_pbo_ = dynamic_cast<BodySystemCUDAGraphics<float>*>(nbody_fp32_.get());
+        nbody_fp64_pbo_ = dynamic_cast<BodySystemCUDAGraphics<double>*>(nbody_fp64_.get());
+
     } else if (use_host_mem_) {
         allocate_nbody.template operator()<BodySystemCUDAHostMemory>();
     } else {
@@ -165,7 +169,7 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCUDA::
     auto newPos = std::vector<TNew>(nb_bodies_4);
     auto newVel = std::vector<TNew>(nb_bodies_4);
 
-    for (int i = 0; i < nb_bodies_4; i++) {
+    for (auto i = 0u; i < nb_bodies_4; ++i) {
         newPos[i] = static_cast<TNew>(oldPos[i]);
         newVel[i] = static_cast<TNew>(oldVel[i]);
     }
@@ -270,9 +274,9 @@ auto ComputeCUDA::get_milliseconds_passed() -> Milliseconds {
 auto ComputeCUDA::display(Interface& interface) const -> void {
     if (use_pbo_) {
         if (fp64_enabled_) {
-            interface.display_nbody_system_fp64(nbody_fp64_->getCurrentReadBuffer());
+            interface.display_nbody_system_fp64(nbody_fp64_pbo_->getCurrentReadBuffer());
         } else {
-            interface.display_nbody_system_fp32(nbody_fp32_->getCurrentReadBuffer());
+            interface.display_nbody_system_fp32(nbody_fp32_pbo_->getCurrentReadBuffer());
         }
     } else {
         // This event sync is required because we are rendering from the host memory that CUDA is writing.

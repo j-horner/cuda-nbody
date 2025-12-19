@@ -13,6 +13,7 @@
 struct NBodyParams;
 class Interface;
 template <std::floating_point T> class BodySystemCUDA;
+template <std::floating_point T> class BodySystemCUDAGraphics;
 
 namespace cuda {
 class device_t;
@@ -81,6 +82,9 @@ class ComputeCUDA {
 
     std::unique_ptr<BodySystemCUDA<float>>  nbody_fp32_;
     std::unique_ptr<BodySystemCUDA<double>> nbody_fp64_;
+
+    BodySystemCUDAGraphics<float>*  nbody_fp32_pbo_ = nullptr;
+    BodySystemCUDAGraphics<double>* nbody_fp64_pbo_ = nullptr;
 
     cuda::event_t host_mem_sync_event_;
     cuda::event_t start_event_;
