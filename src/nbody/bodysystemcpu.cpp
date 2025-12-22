@@ -85,14 +85,13 @@ template <std::floating_point T> auto interaction(std::array<T, 3>& acc, const s
 }    // namespace
 
 template <std::floating_point T>
-BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params)
-    : nb_bodies_(nb_bodies), pos_(nb_bodies_), vel_(nb_bodies_), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
+BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params) : nb_bodies_(nb_bodies), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
     reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
 template <std::floating_point T>
 BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::span<const T> positions, std::span<const T> velocities)
-    : nb_bodies_(nb_bodies), pos_(nb_bodies_), vel_(nb_bodies_), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
+    : nb_bodies_(nb_bodies), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
     assert(pos_.size() == nb_bodies_ * 4);
     assert(vel_.size() == pos_.size());
 
