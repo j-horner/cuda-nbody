@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <array>
+#include <numeric>
 #include <span>
 #include <vector>
 
@@ -51,13 +52,20 @@ namespace {
 
 template <std::floating_point T> auto interaction(std::array<T, 3>& acc, const std::array<T, 3>& pos_i, const std::array<T, 4>& pos_j, T softening_squared) noexcept -> void {
     // r_01  [3 FLOPS]
-    const auto dx = std::array{pos_j[0] - pos_i[0], pos_j[1] - pos_i[1], pos_j[2] - pos_i[2]};
+    const auto dr = std::array{pos_j[0] - pos_i[0], pos_j[1] - pos_i[1], pos_j[2] - pos_i[2]};
+
+    // NOTE: sqrt and / (and r2) are long calculations
+    // breaking dependency chain by allowing them to be calculated separately increases performance ~10%
+
+    const auto dx2 = dr[0] * dr[0];
+    const auto dy2 = dr[1] * dr[1];
+    const auto dz2 = dr[2] * dr[2];
+
+    const auto dx2_dy2   = dx2 + dy2;
+    const auto dz2_soft2 = dz2 + softening_squared;
 
     // d^2 + e^2 [6 FLOPS]
-    const auto r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2] + softening_squared;
-
-    // NOTE: sqrt and / are long calculations
-    // breaking dependency chain by allowing them to be calculated separately increases performance ~10%
+    const auto r2 = dx2_dy2 + dz2_soft2;
 
     // 1 FLOP
     const auto r = std::sqrt(r2);
@@ -69,9 +77,9 @@ template <std::floating_point T> auto interaction(std::array<T, 3>& acc, const s
     const auto s = m_r4 * r;
 
     // (m_1 * r_01) / (d^2 + e^2)^(3/2)  [6 FLOPS]
-    acc[0] += dx[0] * s;
-    acc[1] += dx[1] * s;
-    acc[2] += dx[2] * s;
+    acc[0] += dr[0] * s;
+    acc[1] += dr[1] * s;
+    acc[2] += dr[2] * s;
 }
 
 }    // namespace
