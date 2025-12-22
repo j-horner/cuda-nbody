@@ -29,6 +29,7 @@
 
 #include "nbody_config.hpp"
 
+#include <array>
 #include <span>
 #include <vector>
 
@@ -42,7 +43,7 @@ template <std::floating_point T> class BodySystemCPU {
 
     BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params);
 
-    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::span<const T> positions, std::span<const T> velocities);
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
@@ -50,23 +51,21 @@ template <std::floating_point T> class BodySystemCPU {
 
     auto update_params(const NBodyParams& active_params) noexcept -> void;
 
-    auto get_position() const noexcept -> std::span<const T> { return pos_; }
-    auto get_velocity() const noexcept -> std::span<const T> { return vel_; }
+    auto get_position() const noexcept -> std::span<const T> { return {pos_.front().data(), nb_bodies_ * 4}; }
+    auto get_velocity() const noexcept -> std::span<const T> { return {vel_.front().data(), nb_bodies_ * 4}; }
 
-    auto get_position() noexcept -> std::span<T> { return pos_; }
-    auto get_velocity() noexcept -> std::span<T> { return vel_; }
+    auto get_position() noexcept -> std::span<T> { return {pos_.front().data(), nb_bodies_ * 4}; }
+    auto get_velocity() noexcept -> std::span<T> { return {vel_.front().data(), nb_bodies_ * 4}; }
 
     auto set_position(std::span<const T> data) noexcept -> void;
     auto set_velocity(std::span<const T> data) noexcept -> void;
 
  private:
-    auto calculate_force() noexcept -> void;
-
     std::size_t nb_bodies_;
 
-    std::vector<T> pos_;
-    std::vector<T> vel_;
-    std::vector<T> accel_ = std::vector(nb_bodies_ * 3, T{0.f});
+    std::vector<std::array<T, 4>> pos_;
+    std::vector<std::array<T, 4>> vel_;
+    std::vector<std::array<T, 3>> accel_{nb_bodies_};
 
     T softening_squared_ = 0.00125f;
     T damping_           = 0.995f;

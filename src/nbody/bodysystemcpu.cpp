@@ -47,21 +47,53 @@
 
 using std::ranges::copy;
 
+namespace {
+
+template <std::floating_point T> auto interaction(std::array<T, 3>& acc, const std::array<T, 3>& pos_i, const std::array<T, 4>& pos_j, T softening_squared) noexcept -> void {
+    // r_01  [3 FLOPS]
+    const auto dx = std::array{pos_j[0] - pos_i[0], pos_j[1] - pos_i[1], pos_j[2] - pos_i[2]};
+
+    // d^2 + e^2 [6 FLOPS]
+    const auto r2 = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2] + softening_squared;
+
+    // NOTE: sqrt and / are long calculations
+    // breaking dependency chain by allowing them to be calculated separately increases performance ~10%
+
+    // 1 FLOP
+    const auto r = std::sqrt(r2);
+
+    // 2 FLOPs
+    const auto m_r4 = pos_j[3] / (r2 * r2);
+
+    // 1 FLOP
+    const auto s = m_r4 * r;
+
+    // (m_1 * r_01) / (d^2 + e^2)^(3/2)  [6 FLOPS]
+    acc[0] += dx[0] * s;
+    acc[1] += dx[1] * s;
+    acc[2] += dx[2] * s;
+}
+
+}    // namespace
+
 template <std::floating_point T>
 BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params)
-    : nb_bodies_(nb_bodies), pos_(nb_bodies_ * 4, T{0}), vel_(nb_bodies_ * 4, T{0}), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
+    : nb_bodies_(nb_bodies), pos_(nb_bodies_), vel_(nb_bodies_), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
     reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
 template <std::floating_point T>
-BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : nb_bodies_(nb_bodies), pos_(std::move(positions)), vel_(std::move(velocities)), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
+BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::span<const T> positions, std::span<const T> velocities)
+    : nb_bodies_(nb_bodies), pos_(nb_bodies_), vel_(nb_bodies_), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
     assert(pos_.size() == nb_bodies_ * 4);
     assert(vel_.size() == pos_.size());
+
+    set_position(positions);
+    set_velocity(velocities);
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::reset(const NBodyParams& params, NBodyConfig config) -> void {
-    randomise_bodies<T>(config, pos_, vel_, params.cluster_scale, params.velocity_scale);
+    randomise_bodies<T>(config, get_position(), get_velocity(), params.cluster_scale, params.velocity_scale);
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::update_params(const NBodyParams& active_params) noexcept -> void {
@@ -71,82 +103,38 @@ template <std::floating_point T> auto BodySystemCPU<T>::update_params(const NBod
 
 template <std::floating_point T> auto BodySystemCPU<T>::set_position(std::span<const T> data) noexcept -> void {
     assert(data.size() == pos_.size());
-    copy(data, pos_.begin());
+    copy(data, pos_.front().data());
 }
 template <std::floating_point T> auto BodySystemCPU<T>::set_velocity(std::span<const T> data) noexcept -> void {
     assert(data.size() == vel_.size());
-    copy(data, vel_.begin());
-}
-
-template <std::floating_point T> auto interaction(T accel[3], const T pos_mass_0[4], const T pos_mass_1[4], T softening_squared) noexcept -> void {
-    // r_01  [3 FLOPS]
-    const auto r = std::array{pos_mass_1[0] - pos_mass_0[0], pos_mass_1[1] - pos_mass_0[1], pos_mass_1[2] - pos_mass_0[2]};
-
-    // d^2 + e^2 [6 FLOPS]
-    const auto dist_sqr = r[0] * r[0] + r[1] * r[1] + r[2] * r[2] + softening_squared;
-
-    // [3 FLOPS (2 mul, 1 sqrt)]
-    const auto dist_cubed = std::sqrt(dist_sqr * dist_sqr * dist_sqr);
-
-    // m/r^3 [1 FLOP]
-    const auto s = pos_mass_1[3] / dist_cubed;
-
-    // (m_1 * r_01) / (d^2 + e^2)^(3/2)  [6 FLOPS]
-    accel[0] += r[0] * s;
-    accel[1] += r[1] * s;
-    accel[2] += r[2] * s;
-}
-
-template <std::floating_point T> auto BodySystemCPU<T>::calculate_force() noexcept -> void {
-#pragma omp                           parallel for
-    for (int i = 0; i < nb_bodies_; i++) {
-        int index_accel = 3 * i;
-
-        T acc[3] = {0, 0, 0};
-
-        // We unroll this loop 4X for a small performance boost.
-        int j = 0;
-
-        while (j < nb_bodies_) {
-            interaction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
-            j++;
-            interaction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
-            j++;
-            interaction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
-            j++;
-            interaction<T>(acc, &pos_[4 * i], &pos_[4 * j], softening_squared_);
-            j++;
-        }
-
-        accel_[index_accel]     = acc[0];
-        accel_[index_accel + 1] = acc[1];
-        accel_[index_accel + 2] = acc[2];
-    }
+    copy(data, vel_.front().data());
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept -> void {
-    calculate_force();
+#pragma omp                           parallel for
+    for (int i = 0; i < nb_bodies_; i++) {
+        auto       acc   = std::array<T, 3>{0, 0, 0};
+        const auto pos_i = std::array<T, 3>{pos_[i][0], pos_[i][1], pos_[i][2]};
+
+        // We unroll this loop 4X for a small performance boost.
+        for (auto j = 0; j < nb_bodies_; j += 4) {
+            interaction(acc, pos_i, pos_[j], softening_squared_);
+            interaction(acc, pos_i, pos_[j + 1], softening_squared_);
+            interaction(acc, pos_i, pos_[j + 2], softening_squared_);
+            interaction(acc, pos_i, pos_[j + 3], softening_squared_);
+        }
+
+        accel_[i] = acc;
+    }
 
 #pragma omp parallel for
 
     for (int i = 0; i < nb_bodies_; ++i) {
-        int index       = 4 * i;
-        int index_accel = 3 * i;
+        auto pos = pos_[i];
+        auto vel = vel_[i];
 
-        T pos[3], vel[3], accel[3];
-        pos[0] = pos_[index + 0];
-        pos[1] = pos_[index + 1];
-        pos[2] = pos_[index + 2];
+        const auto& accel = accel_[i];
 
-        vel[0] = vel_[index + 0];
-        vel[1] = vel_[index + 1];
-        vel[2] = vel_[index + 2];
-
-        accel[0] = accel_[index_accel + 0];
-        accel[1] = accel_[index_accel + 1];
-        accel[2] = accel_[index_accel + 2];
-
-        // acceleration = accel / mass;
         // new velocity = old velocity + acceleration * dt
         vel[0] += accel[0] * dt;
         vel[1] += accel[1] * dt;
@@ -161,13 +149,8 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
         pos[1] += vel[1] * dt;
         pos[2] += vel[2] * dt;
 
-        pos_[index + 0] = pos[0];
-        pos_[index + 1] = pos[1];
-        pos_[index + 2] = pos[2];
-
-        vel_[index + 0] = vel[0];
-        vel_[index + 1] = vel[1];
-        vel_[index + 2] = vel[2];
+        pos_[i] = pos;
+        vel_[i] = vel;
     }
 }
 
