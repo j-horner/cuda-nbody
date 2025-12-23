@@ -118,46 +118,40 @@ template <std::floating_point T> auto BodySystemCPU<T>::set_velocity(std::span<c
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept -> void {
-#pragma omp                           parallel for
-    for (int i = 0; i < nb_bodies_; i++) {
+    const auto nb_bodies         = nb_bodies_;
+    const auto softening_squared = softening_squared_;
+
+#pragma omp parallel for
+    for (int i = 0; i < nb_bodies; i++) {
         auto       acc   = std::array<T, 3>{0, 0, 0};
         const auto pos_i = std::array<T, 3>{pos_[i][0], pos_[i][1], pos_[i][2]};
 
         // We unroll this loop 4X for a small performance boost.
-        for (auto j = 0; j < nb_bodies_; j += 4) {
-            interaction(acc, pos_i, pos_[j], softening_squared_);
-            interaction(acc, pos_i, pos_[j + 1], softening_squared_);
-            interaction(acc, pos_i, pos_[j + 2], softening_squared_);
-            interaction(acc, pos_i, pos_[j + 3], softening_squared_);
+        for (auto j = 0; j < nb_bodies; j += 4) {
+            interaction(acc, pos_i, pos_[j], softening_squared);
+            interaction(acc, pos_i, pos_[j + 1], softening_squared);
+            interaction(acc, pos_i, pos_[j + 2], softening_squared);
+            interaction(acc, pos_i, pos_[j + 3], softening_squared);
         }
 
-        accel_[i] = acc;
+        dv_[i][0] = acc[0] * dt;
+        dv_[i][1] = acc[1] * dt;
+        dv_[i][2] = acc[2] * dt;
     }
 
+    const auto damping = damping_;
+
 #pragma omp parallel for
-
-    for (int i = 0; i < nb_bodies_; ++i) {
-        auto pos = pos_[i];
-        auto vel = vel_[i];
-
-        const auto& accel = accel_[i];
-
+    for (auto i = std::size_t{0}; i < nb_bodies; ++i) {
         // new velocity = old velocity + acceleration * dt
-        vel[0] += accel[0] * dt;
-        vel[1] += accel[1] * dt;
-        vel[2] += accel[2] * dt;
-
-        vel[0] *= damping_;
-        vel[1] *= damping_;
-        vel[2] *= damping_;
+        vel_[i][0] = (vel_[i][0] + dv_[i][0]) * damping;
+        vel_[i][1] = (vel_[i][1] + dv_[i][1]) * damping;
+        vel_[i][2] = (vel_[i][2] + dv_[i][2]) * damping;
 
         // new position = old position + velocity * dt
-        pos[0] += vel[0] * dt;
-        pos[1] += vel[1] * dt;
-        pos[2] += vel[2] * dt;
-
-        pos_[i] = pos;
-        vel_[i] = vel;
+        pos_[i][0] += vel_[i][0] * dt;
+        pos_[i][1] += vel_[i][1] * dt;
+        pos_[i][2] += vel_[i][2] * dt;
     }
 }
 
