@@ -91,7 +91,7 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                     vel[v++] = velocity.y * vscale;    // pos.x
                     vel[v++] = velocity.z * vscale;    // pos.x
 
-                    vel[v++] = 1.0f;    // inverse mass
+                    vel[v++] = 0.0f;    // inverse mass
 
                     i++;
                 }
@@ -139,7 +139,7 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                     vel[v++] = vv.y * vscale;
                     vel[v++] = vv.z * vscale;
 
-                    vel[v++] = 1.0f;
+                    vel[v++] = 0.0f;
 
                     i++;
                 }
@@ -179,7 +179,7 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                     vel[v++] = point.y * vscale;    // pos.x
                     vel[v++] = point.z * vscale;    // pos.x
 
-                    vel[v++] = 1.0f;    // inverse mass
+                    vel[v++] = 0.0f;
 
                     ++i;
                 }
