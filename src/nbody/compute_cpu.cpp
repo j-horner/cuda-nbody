@@ -52,18 +52,20 @@ template <std::floating_point TNew, std::floating_point TOld> auto ComputeCPU::s
 
     fp64_enabled_ = std::is_same_v<TNew, double>;
 
-    const auto nb_bodies_4 = static_cast<std::size_t>(nb_bodies_ * 4);
-
-    const auto old_pos = old_nbody.get_position();
-    const auto old_vel = old_nbody.get_velocity();
+    const auto& old_pos = old_nbody.positions();
+    const auto& old_vel = old_nbody.velocities();
 
     // convert float to double
-    const auto new_pos = new_nbody.get_position();
-    const auto new_vel = new_nbody.get_velocity();
+    auto& new_pos = new_nbody.positions();
+    auto& new_vel = new_nbody.velocities();
 
-    for (auto i = 0u; i < nb_bodies_4; ++i) {
-        new_pos[i] = static_cast<TNew>(old_pos[i]);
-        new_vel[i] = static_cast<TNew>(old_vel[i]);
+    for (auto i = std::size_t{0u}; i < nb_bodies_; ++i) {
+        new_pos.x[i] = static_cast<TNew>(old_pos.x[i]);
+        new_pos.y[i] = static_cast<TNew>(old_pos.y[i]);
+        new_pos.z[i] = static_cast<TNew>(old_pos.z[i]);
+        new_vel.x[i] = static_cast<TNew>(old_vel.x[i]);
+        new_vel.y[i] = static_cast<TNew>(old_vel.y[i]);
+        new_vel.z[i] = static_cast<TNew>(old_vel.z[i]);
     }
 }
 
@@ -139,9 +141,9 @@ auto ComputeCPU::get_milliseconds_passed() -> Milliseconds {
 
 auto ComputeCPU::display(Interface& interface) const -> void {
     if (fp64_enabled_) {
-        interface.display_nbody_system(nbody_fp64_->get_position());
+        interface.display_nbody_system(const_cast<const BodySystemCPU<double>&>(*nbody_fp64_).positions());
     } else {
-        interface.display_nbody_system(nbody_fp32_->get_position());
+        interface.display_nbody_system(const_cast<const BodySystemCPU<float>&>(*nbody_fp32_).positions());
     }
 }
 

@@ -200,6 +200,29 @@ auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<co
     display<double>(mode, sprite_size, pbo_64_.use(0));
 }
 
+auto ParticleRenderer::display(DisplayMode mode, float sprite_size, const Coordinates<float>& pos) -> void {
+    const auto nb_bodies = pos.x.size();
+
+    for (auto i = std::size_t{0}; i < nb_bodies; ++i) {
+        pos_fp32_[4 * i]     = pos.x[i];
+        pos_fp32_[4 * i + 1] = pos.y[i];
+        pos_fp32_[4 * i + 2] = pos.z[i];
+    }
+
+    display(mode, sprite_size, pos_fp32_);
+}
+auto ParticleRenderer::display(DisplayMode mode, float sprite_size, const Coordinates<double>& pos) -> void {
+    const auto nb_bodies = pos.x.size();
+
+    for (auto i = std::size_t{0}; i < nb_bodies; ++i) {
+        pos_fp64_[4 * i]     = pos.x[i];
+        pos_fp64_[4 * i + 1] = pos.y[i];
+        pos_fp64_[4 * i + 2] = pos.z[i];
+    }
+
+    display(mode, sprite_size, pos_fp64_);
+}
+
 void ParticleRenderer::_initGL() {
     constexpr static auto vertex_shader_points_code =
         R"(void main() {

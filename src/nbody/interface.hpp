@@ -1,5 +1,6 @@
 #pragma once
 
+#include "coordinates.hpp"
 #include "paramgl.hpp"
 #include "render_particles.hpp"
 
@@ -33,6 +34,9 @@ class Interface {
 
     auto display_nbody_system(std::span<const float> positions) -> void;
     auto display_nbody_system(std::span<const double> positions) -> void;
+
+    auto display_nbody_system(const Coordinates<float>& positions) -> void;
+    auto display_nbody_system(const Coordinates<double>& positions) -> void;
 
     auto display_nbody_system_fp32(const BufferObject& pbo) -> void;
     auto display_nbody_system_fp64(const BufferObject& pbo) -> void;

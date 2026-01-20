@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include "coordinates.hpp"
 #include "nbody_config.hpp"
 
 #include <concepts>
@@ -34,6 +35,9 @@
 
 // utility function
 template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::span<T> pos, std::span<T> vel, float clusterScale, float velocityScale) noexcept -> void;
+template <std::floating_point T> auto randomise_bodies(NBodyConfig config, Coordinates<T>& pos, Coordinates<T>& vel, std::span<T> mass, float clusterScale, float velocityScale) noexcept -> void;
 
 extern template auto randomise_bodies<float>(NBodyConfig config, std::span<float> pos, std::span<float> vel, float clusterScale, float velocityScale) noexcept -> void;
 extern template auto randomise_bodies<double>(NBodyConfig config, std::span<double> pos, std::span<double> vel, float clusterScale, float velocityScale) noexcept -> void;
+extern template auto randomise_bodies<float>(NBodyConfig config, Coordinates<float>& pos, Coordinates<float>& vel, std::span<float> mass, float clusterScale, float velocityScale) noexcept -> void;
+extern template auto randomise_bodies<double>(NBodyConfig config, Coordinates<double>& pos, Coordinates<double>& vel, std::span<double> mass, float clusterScale, float velocityScale) noexcept -> void;

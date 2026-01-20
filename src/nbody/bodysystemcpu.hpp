@@ -27,11 +27,14 @@
 
 #pragma once
 
+#include "coordinates.hpp"
 #include "nbody_config.hpp"
 
 #include <array>
 #include <span>
 #include <vector>
+
+#include <cassert>
 
 struct NBodyParams;
 
@@ -51,11 +54,11 @@ template <std::floating_point T> class BodySystemCPU {
 
     auto update_params(const NBodyParams& active_params) noexcept -> void;
 
-    auto get_position() const noexcept -> std::span<const T> { return {pos_.front().data(), nb_bodies_ * 4}; }
-    auto get_velocity() const noexcept -> std::span<const T> { return {vel_.front().data(), nb_bodies_ * 4}; }
+    auto& positions() const noexcept { return positions_; }
+    auto& velocities() const noexcept { return velocities_; }
 
-    auto get_position() noexcept -> std::span<T> { return {pos_.front().data(), nb_bodies_ * 4}; }
-    auto get_velocity() noexcept -> std::span<T> { return {vel_.front().data(), nb_bodies_ * 4}; }
+    auto& positions() noexcept { return positions_; }
+    auto& velocities() noexcept { return velocities_; }
 
     auto set_position(std::span<const T> data) noexcept -> void;
     auto set_velocity(std::span<const T> data) noexcept -> void;
@@ -63,9 +66,10 @@ template <std::floating_point T> class BodySystemCPU {
  private:
     std::size_t nb_bodies_;
 
-    std::vector<std::array<T, 4>> pos_{nb_bodies_};
-    std::vector<std::array<T, 4>> vel_{nb_bodies_};
-    std::vector<std::array<T, 3>> dv_{nb_bodies_};
+    Coordinates<T> positions_{nb_bodies_};
+    Coordinates<T> velocities_{nb_bodies_};
+    Coordinates<T> dv_{nb_bodies_};
+    std::vector<T> masses_ = std::vector<T>(nb_bodies_);
 
     T softening_squared_ = 0.00125f;
     T damping_           = 0.995f;
