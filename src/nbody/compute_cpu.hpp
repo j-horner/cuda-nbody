@@ -26,9 +26,6 @@ class ComputeCPU {
 
     auto nb_bodies() const noexcept { return nb_bodies_; }
 
-    auto get_position_fp32() const noexcept -> std::span<const float>;
-    auto get_position_fp64() const noexcept -> std::span<const double>;
-
     auto display(Interface& interface) const -> void;
 
     auto switch_precision() -> void;

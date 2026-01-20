@@ -120,13 +120,6 @@ auto ComputeCPU::update(float dt) -> void {
     }
 }
 
-auto ComputeCPU::get_position_fp32() const noexcept -> std::span<const float> {
-    return nbody_fp32_->get_position();
-}
-auto ComputeCPU::get_position_fp64() const noexcept -> std::span<const double> {
-    return nbody_fp64_->get_position();
-}
-
 auto ComputeCPU::update_params(const NBodyParams& params) -> void {
     if (fp64_enabled_) {
         nbody_fp64_->update_params(params);
