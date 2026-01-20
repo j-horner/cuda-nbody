@@ -143,6 +143,8 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
     const auto softening_squared = softening_squared_;
 
     if constexpr (std::is_same_v<T, float>) {
+        std::fill(dv_.front().begin(), dv_.back().end(), 0.f);
+
         const auto dt_8   = _mm256_setr_ps(dt, dt, dt, dt, dt, dt, dt, dt);
         const auto soft_8 = _mm256_setr_ps(softening_squared, softening_squared, softening_squared, softening_squared, softening_squared, softening_squared, softening_squared, softening_squared);
 
@@ -300,6 +302,7 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
             // dv_[i][1] = acc[1] * dt;
             // dv_[i][2] = acc[2] * dt;
         }
+
     } else {
 #pragma omp parallel for
         for (int i = 0; i < nb_bodies; i++) {
