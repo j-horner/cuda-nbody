@@ -1,18 +1,6 @@
 #include "camera.hpp"
 
-#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-#define NOMINMAX
-#include <GL/glew.h>
-#endif
-
-#if defined(__APPLE__) || defined(MACOSX)
-#include <OpenGL/gl.h>
-#else
-#include <GL/gl.h>
-#ifdef __linux__
-#include <GL/glx.h>
-#endif
-#endif
+#include "gl_includes.hpp"
 
 #include <cmath>
 

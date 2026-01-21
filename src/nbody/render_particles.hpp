@@ -28,6 +28,7 @@
 #pragma once
 
 #include "buffer_objects.hpp"
+#include "coordinates.hpp"
 
 #include <array>
 #include <span>
@@ -45,6 +46,9 @@ class ParticleRenderer {
     auto display(DisplayMode mode, float sprite_size, std::span<const float> pos) -> void;
     auto display(DisplayMode mode, float sprite_size, std::span<const double> pos) -> void;
 
+    auto display(DisplayMode mode, float sprite_size, const Coordinates<float>& pos) -> void;
+    auto display(DisplayMode mode, float sprite_size, const Coordinates<double>& pos) -> void;
+
     // invoked by GPU impl using OpenGL interop
     template <std::floating_point T> auto display(DisplayMode mode, float sprite_size, const BufferObject& pbo) -> void;
 
@@ -56,8 +60,8 @@ class ParticleRenderer {
 
     std::vector<float> colour_;
 
-    std::span<const float>  pos_;
-    std::span<const double> pos_fp64_;
+    std::vector<float>  pos_fp32_ = std::vector<float>(colour_.size());
+    std::vector<double> pos_fp64_ = std::vector<double>(colour_.size());
 
     unsigned int     program_points_  = 0;
     unsigned int     program_sprites_ = 0;

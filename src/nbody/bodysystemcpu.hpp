@@ -27,11 +27,14 @@
 
 #pragma once
 
+#include "coordinates.hpp"
 #include "nbody_config.hpp"
 
-#include <filesystem>
+#include <array>
 #include <span>
 #include <vector>
+
+#include <cassert>
 
 struct NBodyParams;
 
@@ -43,33 +46,30 @@ template <std::floating_point T> class BodySystemCPU {
 
     BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params);
 
-    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::span<const T> positions, std::span<const T> velocities);
 
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
-    auto update(T deltaTime) noexcept -> void;
+    auto update(T dt) noexcept -> void;
 
     auto update_params(const NBodyParams& active_params) noexcept -> void;
 
-    auto get_position() const noexcept -> std::span<const T> { return pos_; }
-    auto get_velocity() const noexcept -> std::span<const T> { return vel_; }
+    auto& positions() const noexcept { return positions_; }
+    auto& velocities() const noexcept { return velocities_; }
 
-    auto get_position() noexcept -> std::span<T> { return pos_; }
-    auto get_velocity() noexcept -> std::span<T> { return vel_; }
+    auto& positions() noexcept { return positions_; }
+    auto& velocities() noexcept { return velocities_; }
 
     auto set_position(std::span<const T> data) noexcept -> void;
     auto set_velocity(std::span<const T> data) noexcept -> void;
 
  private:
-    auto setSoftening(T softening) noexcept -> void { softening_squared_ = softening * softening; }
-
-    auto _computeNBodyGravitation() noexcept -> void;
-
     std::size_t nb_bodies_;
 
-    std::vector<T> pos_;
-    std::vector<T> vel_;
-    std::vector<T> force_ = std::vector(nb_bodies_ * 3, T{0.f});
+    Coordinates<T> positions_{nb_bodies_};
+    Coordinates<T> velocities_{nb_bodies_};
+    Coordinates<T> dv_{nb_bodies_};
+    std::vector<T> masses_ = std::vector<T>(nb_bodies_);
 
     T softening_squared_ = 0.00125f;
     T damping_           = 0.995f;

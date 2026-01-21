@@ -64,22 +64,22 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                 auto i = std::size_t{0};
 
                 while (i < nb_bodies) {
-                    auto point  = vec3<T>{};
-                    point.x     = rng_2<T>();
-                    point.y     = rng_2<T>();
-                    point.z     = rng_2<T>();
-                    auto lenSqr = dot<T>(point, point);
+                    auto point = vec3<T>{};
+                    point.x    = rng_2<T>();
+                    point.y    = rng_2<T>();
+                    point.z    = rng_2<T>();
+                    auto r2    = dot<T>(point, point);
 
-                    if (lenSqr > 1)
+                    if (r2 > 1)
                         continue;
 
                     auto velocity = vec3<T>{};
                     velocity.x    = rng_2<T>();
                     velocity.y    = rng_2<T>();
                     velocity.z    = rng_2<T>();
-                    lenSqr        = dot<T>(velocity, velocity);
+                    r2            = dot<T>(velocity, velocity);
 
-                    if (lenSqr > 1)
+                    if (r2 > 1)
                         continue;
 
                     pos[p++] = point.x * scale;    // pos.x
@@ -91,7 +91,7 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                     vel[v++] = velocity.y * vscale;    // pos.x
                     vel[v++] = velocity.z * vscale;    // pos.x
 
-                    vel[v++] = 1.0f;    // inverse mass
+                    vel[v++] = 0.0f;    // inverse mass
 
                     i++;
                 }
@@ -139,7 +139,7 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                     vel[v++] = vv.y * vscale;
                     vel[v++] = vv.z * vscale;
 
-                    vel[v++] = 1.0f;
+                    vel[v++] = 0.0f;
 
                     i++;
                 }
@@ -166,9 +166,9 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                     point.y = rng_2<T>();
                     point.z = rng_2<T>();
 
-                    const auto lenSqr = dot<T>(point, point);
+                    const auto r2 = dot<T>(point, point);
 
-                    if (lenSqr > 1)
+                    if (r2 > 1)
                         continue;
 
                     pos[p++] = point.x * scale;     // pos.x
@@ -179,7 +179,137 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
                     vel[v++] = point.y * vscale;    // pos.x
                     vel[v++] = point.z * vscale;    // pos.x
 
-                    vel[v++] = 1.0f;    // inverse mass
+                    vel[v++] = 0.0f;
+
+                    ++i;
+                }
+            }
+            break;
+    }
+}
+
+template <std::floating_point T> auto randomise_bodies(NBodyConfig config, Coordinates<T>& pos, Coordinates<T>& vel, std::span<T> mass, float clusterScale, float velocityScale) noexcept -> void {
+    using enum NBodyConfig;
+
+    const auto nb_bodies = pos.x.size();
+    assert(vel.x.size() == nb_bodies);
+    assert(mass.size() == nb_bodies);
+
+    switch (config) {
+        default:
+        case NBODY_CONFIG_RANDOM:
+            {
+                const auto scale  = clusterScale * std::max(T{1}, nb_bodies / T{1024});
+                const auto vscale = velocityScale * scale;
+
+                auto i = std::size_t{0};
+
+                while (i < nb_bodies) {
+                    auto point = vec3<T>{};
+                    point.x    = rng_2<T>();
+                    point.y    = rng_2<T>();
+                    point.z    = rng_2<T>();
+                    auto r2    = dot<T>(point, point);
+
+                    if (r2 > 1)
+                        continue;
+
+                    auto velocity = vec3<T>{};
+                    velocity.x    = rng_2<T>();
+                    velocity.y    = rng_2<T>();
+                    velocity.z    = rng_2<T>();
+                    r2            = dot<T>(velocity, velocity);
+
+                    if (r2 > 1)
+                        continue;
+
+                    pos.x[i] = point.x * scale;    // pos.x
+                    pos.y[i] = point.y * scale;    // pos.y
+                    pos.z[i] = point.z * scale;    // pos.z
+                    mass[i]  = T{1};               // mass
+
+                    vel.x[i] = velocity.x * vscale;    // pos.x
+                    vel.y[i] = velocity.y * vscale;    // pos.x
+                    vel.z[i] = velocity.z * vscale;    // pos.x
+
+                    i++;
+                }
+            }
+            break;
+
+        case NBODY_CONFIG_SHELL:
+            {
+                const auto scale  = clusterScale;
+                const auto vscale = scale * velocityScale;
+                const auto inner  = T{2.5f} * scale;
+                const auto outer  = T{4} * scale;
+
+                auto i = std::size_t{0};
+
+                while (i < nb_bodies) {
+                    auto x = rng_2<T>();
+                    auto y = rng_2<T>();
+                    auto z = rng_2<T>();
+
+                    auto       point = vec3<T>{x, y, z};
+                    const auto len   = normalize<T>(point);
+
+                    if (len > 1)
+                        continue;
+
+                    pos.x[i] = point.x * (inner + (outer - inner) * rng<T>());
+                    pos.y[i] = point.y * (inner + (outer - inner) * rng<T>());
+                    pos.z[i] = point.z * (inner + (outer - inner) * rng<T>());
+                    mass[i]  = T{1};
+
+                    auto axis = vec3<T>{0, 0, 1};
+
+                    if (1 - point.z < 1e-6) {
+                        axis.x = point.y;
+                        axis.y = point.x;
+                        normalize<T>(axis);
+                    }
+
+                    auto vv  = vec3<T>{pos.x[i], pos.y[i], pos.z[i]};
+                    vv       = cross<T>(vv, axis);
+                    vel.x[i] = vv.x * vscale;
+                    vel.y[i] = vv.y * vscale;
+                    vel.z[i] = vv.z * vscale;
+
+                    ++i;
+                }
+            }
+            break;
+
+        case NBODY_CONFIG_EXPAND:
+            {
+                auto scale = clusterScale * nb_bodies / T{1024};
+
+                if (scale < 1) {
+                    scale = clusterScale;
+                }
+
+                const auto vscale = scale * velocityScale;
+
+                for (auto i = std::size_t{0}; i < nb_bodies;) {
+                    auto point = vec3<T>{};
+
+                    point.x = rng_2<T>();
+                    point.y = rng_2<T>();
+                    point.z = rng_2<T>();
+
+                    const auto r2 = dot<T>(point, point);
+
+                    if (r2 > 1)
+                        continue;
+
+                    pos.x[i] = point.x * scale;
+                    pos.y[i] = point.y * scale;
+                    pos.z[i] = point.z * scale;
+                    mass[i]  = T{1};
+                    vel.x[i] = point.x * vscale;
+                    vel.y[i] = point.y * vscale;
+                    vel.z[i] = point.z * vscale;
 
                     ++i;
                 }
@@ -190,3 +320,5 @@ template <std::floating_point T> auto randomise_bodies(NBodyConfig config, std::
 
 template auto randomise_bodies<float>(NBodyConfig config, std::span<float> pos, std::span<float> vel, float clusterScale, float velocityScale) noexcept -> void;
 template auto randomise_bodies<double>(NBodyConfig config, std::span<double> pos, std::span<double> vel, float clusterScale, float velocityScale) noexcept -> void;
+template auto randomise_bodies<float>(NBodyConfig config, Coordinates<float>& pos, Coordinates<float>& vel, std::span<float> mass, float clusterScale, float velocityScale) noexcept -> void;
+template auto randomise_bodies<double>(NBodyConfig config, Coordinates<double>& pos, Coordinates<double>& vel, std::span<double> mass, float clusterScale, float velocityScale) noexcept -> void;

@@ -291,29 +291,35 @@ auto ComputeCUDA::display(Interface& interface) const -> void {
     }
 }
 
-template <std::floating_point T> auto ComputeCUDA::compare_results(const NBodyParams& params, BodySystemCUDA<T>& nbodyCuda) const -> bool {
+template <std::floating_point T> auto ComputeCUDA::compare_results(const NBodyParams& params, BodySystemCUDA<T>& nbody_cuda) const -> bool {
     auto passed = true;
 
-    nbodyCuda.update(0.001f);
+    nbody_cuda.update(0.001f);
 
     {
-        auto nbodyCpu = BodySystemCPU<T>(nb_bodies_, params);
+        auto nbody_cpu = BodySystemCPU<T>(nb_bodies_, params);
 
-        nbodyCpu.set_position(nbodyCuda.get_position());
-        nbodyCpu.set_velocity(nbodyCuda.get_velocity());
+        nbody_cpu.set_position(nbody_cuda.get_position());
+        nbody_cpu.set_velocity(nbody_cuda.get_velocity());
 
-        nbodyCpu.update(0.001f);
+        nbody_cpu.update(0.001f);
 
-        const auto cudaPos = nbodyCuda.get_position();
-        const auto cpuPos  = nbodyCpu.get_position();
+        const auto cuda_pos = nbody_cuda.get_position();
+        const auto cpu_pos  = const_cast<const BodySystemCPU<T>&>(nbody_cpu).positions();
 
         constexpr auto tolerance = T{0.0005f};
 
-        for (int i = 0; i < nb_bodies_; i++) {
-            if (std::abs(cpuPos[i] - cudaPos[i]) > tolerance) {
+        auto check = [&](T cpu_result, T cuda_result) {
+            if (std::abs(cpu_result - cuda_result) > tolerance) {
                 passed = false;
-                std::println("Error: (host){} != (device){}", cpuPos[i], cudaPos[i]);
+                std::println("Error: (host){} != (device){}", cpu_result, cuda_result);
             }
+        };
+
+        for (auto i = std::size_t{0}; i < nb_bodies_; ++i) {
+            check(cpu_pos.x[i], cuda_pos[4 * i]);
+            check(cpu_pos.y[i], cuda_pos[4 * i + 1]);
+            check(cpu_pos.z[i], cuda_pos[4 * i + 2]);
         }
     }
     if (passed) {

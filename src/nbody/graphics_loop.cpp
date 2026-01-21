@@ -19,6 +19,13 @@
 
 #include <cassert>
 
+//
+//  Implements register_callback<...>(...) allowing calls such as: register_callback<glutXYZFuncUcall>(XYZLambda);
+//  Where:
+//      - glutXYZFuncUcall expects a function pointer and void* pair
+//      - XYZLambda is the Lambda representing the desired callback functionality.
+//
+
 // get the parameter list of a lambda (with some minor fixes): https://stackoverflow.com/a/70954691
 template <typename T> struct Signature;
 template <typename C, typename... Args> struct Signature<void (C::*)(Args...) const> {

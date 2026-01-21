@@ -125,3 +125,73 @@ auto read_tipsy_file(const std::filesystem::path& fileName) -> std::array<std::v
 
     return {std::move(bodyPositions), std::move(bodyVelocities)};
 }
+
+auto read_tipsy_file_coordinates(const std::filesystem::path& fileName) -> TipsyData {
+    std::println("Trying to read file: {}", fileName.string());
+
+    auto inputFile = std::ifstream(fileName, std::ios::in | std::ios::binary);
+
+    if (!inputFile.is_open()) {
+        throw std::runtime_error("Can't open input file");
+    }
+
+    auto read_data = [&](auto& data) { inputFile.read(reinterpret_cast<char*>(&data), sizeof(data)); };
+
+    auto h = Dump{};
+    read_data(h);
+
+    // Read tipsy header
+    auto NTotal = static_cast<std::size_t>(h.nbodies);
+    auto NFirst = h.ndark;
+
+    auto d = DarkParticle{};
+    auto s = StarParticle{};
+
+    auto masses = std::vector<double>(NTotal);
+
+    auto positions  = Coordinates<double>{NTotal};
+    auto velocities = Coordinates<double>{NTotal};
+
+    for (int i = 0; i < NTotal; i++) {
+        if (i < NFirst) {
+            read_data(d);
+            masses[i]       = d.mass;
+            positions.x[i]  = d.pos[0];
+            positions.y[i]  = d.pos[1];
+            positions.z[i]  = d.pos[2];
+            velocities.x[i] = d.vel[0];
+            velocities.y[i] = d.vel[1];
+            velocities.z[i] = d.vel[2];
+        } else {
+            read_data(s);
+            masses[i]       = s.mass;
+            positions.x[i]  = s.pos[0];
+            positions.y[i]  = s.pos[1];
+            positions.z[i]  = s.pos[2];
+            velocities.x[i] = s.vel[0];
+            velocities.y[i] = s.vel[1];
+            velocities.z[i] = s.vel[2];
+        }
+    }
+
+    // round up to a multiple of 256 bodies since our kernel only supports that...
+    auto newTotal = NTotal;
+
+    if (NTotal % 256) {
+        newTotal = ((NTotal / 256) + 1) * 256;
+    }
+
+    auto pad_with_0 = [&](std::vector<double>& v) { v.insert(v.end(), 4u * (newTotal - NTotal), 0.0); };
+
+    pad_with_0(positions.x);
+    pad_with_0(positions.y);
+    pad_with_0(positions.z);
+    pad_with_0(velocities.x);
+    pad_with_0(velocities.y);
+    pad_with_0(velocities.z);
+    pad_with_0(masses);
+
+    std::println("Read {} bodies", newTotal);
+
+    return {std::move(positions), std::move(velocities), std::move(masses)};
+}

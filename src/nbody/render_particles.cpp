@@ -200,15 +200,38 @@ auto ParticleRenderer::display(DisplayMode mode, float sprite_size, std::span<co
     display<double>(mode, sprite_size, pbo_64_.use(0));
 }
 
+auto ParticleRenderer::display(DisplayMode mode, float sprite_size, const Coordinates<float>& pos) -> void {
+    const auto nb_bodies = pos.x.size();
+
+    for (auto i = std::size_t{0}; i < nb_bodies; ++i) {
+        pos_fp32_[4 * i]     = pos.x[i];
+        pos_fp32_[4 * i + 1] = pos.y[i];
+        pos_fp32_[4 * i + 2] = pos.z[i];
+    }
+
+    display(mode, sprite_size, pos_fp32_);
+}
+auto ParticleRenderer::display(DisplayMode mode, float sprite_size, const Coordinates<double>& pos) -> void {
+    const auto nb_bodies = pos.x.size();
+
+    for (auto i = std::size_t{0}; i < nb_bodies; ++i) {
+        pos_fp64_[4 * i]     = pos.x[i];
+        pos_fp64_[4 * i + 1] = pos.y[i];
+        pos_fp64_[4 * i + 2] = pos.z[i];
+    }
+
+    display(mode, sprite_size, pos_fp64_);
+}
+
 void ParticleRenderer::_initGL() {
-    constexpr static auto vertexShaderPoints =
+    constexpr static auto vertex_shader_points_code =
         R"(void main() {
                 vec4 vert = vec4(gl_Vertex.xyz, 1.0);
                 gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * vert;
                 gl_FrontColor = gl_Color;
             })";
 
-    constexpr static auto vertexShader =
+    constexpr static auto vertex_shader_code =
         R"(void main() {
                 float pointSize = 500.0 * gl_Point.size;
                 vec4 vert = gl_Vertex;
@@ -222,7 +245,7 @@ void ParticleRenderer::_initGL() {
                 gl_FrontSecondaryColor = gl_SecondaryColor;
             })";
 
-    constexpr static auto pixelShader =
+    constexpr static auto pixel_shader_code =
         R"(uniform sampler2D splatTexture;
            void main() {
                 vec4 color2 = gl_SecondaryColor;
@@ -230,25 +253,25 @@ void ParticleRenderer::_initGL() {
                 gl_FragColor = color * color2;      // mix(vec4(0.1, 0.0, 0.0, color.w), color2, color.w);
             })";
 
-    auto m_vertexShader       = glCreateShader(GL_VERTEX_SHADER);
-    auto m_vertexShaderPoints = glCreateShader(GL_VERTEX_SHADER);
-    auto m_pixelShader        = glCreateShader(GL_FRAGMENT_SHADER);
+    auto vertex_shader        = glCreateShader(GL_VERTEX_SHADER);
+    auto vertex_shader_points = glCreateShader(GL_VERTEX_SHADER);
+    auto pixel_shader         = glCreateShader(GL_FRAGMENT_SHADER);
 
-    glShaderSource(m_vertexShader, 1, &vertexShader, 0);
-    glShaderSource(m_pixelShader, 1, &pixelShader, 0);
-    glShaderSource(m_vertexShaderPoints, 1, &vertexShaderPoints, 0);
+    glShaderSource(vertex_shader, 1, &vertex_shader_code, 0);
+    glShaderSource(pixel_shader, 1, &pixel_shader_code, 0);
+    glShaderSource(vertex_shader_points, 1, &vertex_shader_points_code, 0);
 
-    glCompileShader(m_vertexShader);
-    glCompileShader(m_vertexShaderPoints);
-    glCompileShader(m_pixelShader);
+    glCompileShader(vertex_shader);
+    glCompileShader(vertex_shader_points);
+    glCompileShader(pixel_shader);
 
     program_sprites_ = glCreateProgram();
-    glAttachShader(program_sprites_, m_vertexShader);
-    glAttachShader(program_sprites_, m_pixelShader);
+    glAttachShader(program_sprites_, vertex_shader);
+    glAttachShader(program_sprites_, pixel_shader);
     glLinkProgram(program_sprites_);
 
     program_points_ = glCreateProgram();
-    glAttachShader(program_points_, m_vertexShaderPoints);
+    glAttachShader(program_points_, vertex_shader_points);
     glLinkProgram(program_points_);
 
     _createTexture();
