@@ -11,7 +11,8 @@
         "opengl",
         "freeglut",
         "glew",
-        "cuda-api-wrappers"
+        "cuda-api-wrappers",
+        "xsimd"
     ],
     "$default-features-explanation": "Users using this library transitively will not include tests.",
     "default-features": [],

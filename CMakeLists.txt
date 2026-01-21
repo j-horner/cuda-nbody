@@ -121,6 +121,8 @@ find_package(GLEW REQUIRED)
 
 find_package(cuda-api-wrappers CONFIG REQUIRED)
 
+find_package(xsimd CONFIG REQUIRED)
+
 # ===================================================================
 #
 #   Main code to build

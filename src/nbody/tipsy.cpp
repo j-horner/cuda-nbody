@@ -147,7 +147,7 @@ auto read_tipsy_file_coordinates(const std::filesystem::path& fileName) -> Tipsy
     auto d = DarkParticle{};
     auto s = StarParticle{};
 
-    auto masses = std::vector<double>(NTotal);
+    auto masses = Coordinates<double>::Vector(NTotal);
 
     auto positions  = Coordinates<double>{NTotal};
     auto velocities = Coordinates<double>{NTotal};
@@ -181,7 +181,7 @@ auto read_tipsy_file_coordinates(const std::filesystem::path& fileName) -> Tipsy
         newTotal = ((NTotal / 256) + 1) * 256;
     }
 
-    auto pad_with_0 = [&](std::vector<double>& v) { v.insert(v.end(), 4u * (newTotal - NTotal), 0.0); };
+    auto pad_with_0 = [&](Coordinates<double>::Vector& v) { v.insert(v.end(), 4u * (newTotal - NTotal), 0.0); };
 
     pad_with_0(positions.x);
     pad_with_0(positions.y);

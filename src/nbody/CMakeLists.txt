@@ -27,7 +27,7 @@ target_link_libraries(${PROJECT_NAME}_camera PRIVATE GLEW::GLEW OpenGL::GL)
 target_link_libraries(${PROJECT_NAME}_win_coords PRIVATE GLUT::GLUT)
 target_link_libraries(${PROJECT_NAME}_render_particles PUBLIC ${PROJECT_NAME}_buffer_objects PRIVATE OpenGL::GL GLEW::GLEW)
 target_link_libraries(${PROJECT_NAME}_buffer_objects PRIVATE OpenGL::GL GLEW::GLEW)
-target_link_libraries(${PROJECT_NAME}_randomise_bodies PRIVATE CUDA::cudart_static)
+target_link_libraries(${PROJECT_NAME}_randomise_bodies PUBLIC xsimd PRIVATE CUDA::cudart_static)
 
 target_link_libraries(${PROJECT_NAME}_paramgl
                         PUBLIC
@@ -38,9 +38,15 @@ target_link_libraries(${PROJECT_NAME}_paramgl
                             ${PROJECT_NAME}_win_coords)
 
 target_link_libraries(${PROJECT_NAME}_bodysystemcpu
+                        PUBLIC
+                            xsimd
                         PRIVATE
                             CUDA::cudart_static
                             ${PROJECT_NAME}_randomise_bodies)
+
+target_link_libraries(${PROJECT_NAME}_tipsy
+                        PUBLIC
+                            xsimd)
 
 target_link_libraries(${PROJECT_NAME}_bodysystemcuda
                         PUBLIC
