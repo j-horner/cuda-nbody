@@ -25,11 +25,7 @@ ComputeCPU::ComputeCPU(double              fp64_enabled,
     std::println("> {} precision floating point simulation", fp64_enabled ? "Double" : "Single");
     std::println("> 0 Devices used for simulation");
 
-#ifdef OPENMP
-    num_bodies_ = 8192;
-#else
-    nb_bodies_ = 4096;
-#endif
+    nb_bodies_ = 8192;
 
     if (num_bodies != 0u) {
         nb_bodies_ = num_bodies;
