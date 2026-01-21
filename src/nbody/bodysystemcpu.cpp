@@ -138,85 +138,78 @@ template <std::floating_point T> auto BodySystemCPU<T>::set_velocity(std::span<c
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept -> void {
-    const auto nb_interactions = nb_bodies_ * (nb_bodies_ - 1);
+    // const auto nb_interactions = nb_bodies_ * (nb_bodies_ - 1);
 
-    const auto cycle_start = current_clock_cycle();
+    // const auto cycle_start = current_clock_cycle();
 
     const auto nb_bodies         = nb_bodies_;
     const auto softening_squared = softening_squared_;
     const auto damping           = damping_;
 
     if constexpr (std::is_same_v<T, float>) {
+        // could separate 1st particles contribution and initialise dv there but doesnt noticeably improve performance
         fill(dv_.x, T{0});
         fill(dv_.y, T{0});
         fill(dv_.z, T{0});
 
-        const auto softening_8 = _mm256_setr_ps(softening_squared, softening_squared, softening_squared, softening_squared, softening_squared, softening_squared, softening_squared, softening_squared);
+        {
+            const auto softening_8 = _mm256_set1_ps(softening_squared);
 
-        for (auto j = 0; j < nb_bodies; ++j) {
-            const auto pos_j = std::array{positions_.x[j], positions_.y[j], positions_.z[j]};
+            for (auto j = 0; j < nb_bodies; ++j) {
+                const auto pos_j_x = _mm256_set1_ps(positions_.x[j]);
+                const auto pos_j_y = _mm256_set1_ps(positions_.y[j]);
+                const auto pos_j_z = _mm256_set1_ps(positions_.z[j]);
 
-            const auto pos_j_x = _mm256_setr_ps(pos_j[0], pos_j[0], pos_j[0], pos_j[0], pos_j[0], pos_j[0], pos_j[0], pos_j[0]);
-            const auto pos_j_y = _mm256_setr_ps(pos_j[1], pos_j[1], pos_j[1], pos_j[1], pos_j[1], pos_j[1], pos_j[1], pos_j[1]);
-            const auto pos_j_z = _mm256_setr_ps(pos_j[2], pos_j[2], pos_j[2], pos_j[2], pos_j[2], pos_j[2], pos_j[2], pos_j[2]);
-
-            const auto m_j = masses_[j];
-
-            const auto m_8 = _mm256_setr_ps(m_j, m_j, m_j, m_j, m_j, m_j, m_j, m_j);
+                const auto m_j = _mm256_set1_ps(masses_[j]);
 
 #pragma omp parallel for
-            for (auto i = std::size_t{0}; i < nb_bodies; i += 8) {
-                const auto pos_i_x = _mm256_load_ps(positions_.x.data() + i);
-                const auto pos_i_y = _mm256_load_ps(positions_.y.data() + i);
-                const auto pos_i_z = _mm256_load_ps(positions_.z.data() + i);
+                for (auto i = std::size_t{0}; i < nb_bodies; i += 8) {
+                    const auto pos_i_x = _mm256_load_ps(positions_.x.data() + i);
+                    const auto pos_i_y = _mm256_load_ps(positions_.y.data() + i);
+                    const auto pos_i_z = _mm256_load_ps(positions_.z.data() + i);
 
-                // r_01  [3 FLOPS]
-                const auto dx = _mm256_sub_ps(pos_j_x, pos_i_x);
-                const auto dy = _mm256_sub_ps(pos_j_y, pos_i_y);
-                const auto dz = _mm256_sub_ps(pos_j_z, pos_i_z);
+                    auto dv_x = _mm256_load_ps(dv_.x.data() + i);
+                    auto dv_y = _mm256_load_ps(dv_.y.data() + i);
+                    auto dv_z = _mm256_load_ps(dv_.z.data() + i);
 
-                // NOTE: sqrt and / (and r2) are long calculations
-                // breaking dependency chain by allowing them to be calculated separately increases performance ~10%
+                    // dr  [3 FLOPS]
+                    const auto dx = _mm256_sub_ps(pos_j_x, pos_i_x);
+                    const auto dy = _mm256_sub_ps(pos_j_y, pos_i_y);
+                    const auto dz = _mm256_sub_ps(pos_j_z, pos_i_z);
 
-                // d^2 + e^2 [6 FLOPS]
-                const auto dx2 = _mm256_mul_ps(dx, dx);
-                const auto dy2 = _mm256_mul_ps(dy, dy);
-                const auto dz2 = _mm256_mul_ps(dz, dz);
+                    // NOTE: sqrt and / (and r2) are long calculations
+                    // breaking dependency chain by allowing them to be calculated separately increases performance ~10%
 
-                auto r2 = _mm256_add_ps(softening_8, dx2);
-                r2      = _mm256_add_ps(r2, dy2);
-                r2      = _mm256_add_ps(r2, dz2);
+                    // d^2 + e^2 [6 FLOPS]
+                    const auto r2 = _mm256_add_ps(_mm256_add_ps(softening_8, _mm256_mul_ps(dx, dx)), _mm256_add_ps(_mm256_mul_ps(dy, dy), _mm256_mul_ps(dz, dz)));
 
-                // 1 FLOP
-                const auto r = _mm256_sqrt_ps(r2);
+                    // 1 FLOP
+                    const auto r = _mm256_sqrt_ps(r2);
 
-                // 2 FLOPs
-                const auto m_r4 = _mm256_div_ps(m_8, _mm256_mul_ps(r2, r2));
+                    // 2 FLOPs
+                    const auto m_r4 = _mm256_div_ps(m_j, _mm256_mul_ps(r2, r2));
 
-                // 1 FLOP
-                const auto m_r3 = _mm256_mul_ps(m_r4, r);
+                    // 1 FLOP
+                    const auto m_r3 = _mm256_mul_ps(m_r4, r);
 
-                // (m_1 * r_01) / (d^2 + e^2)^(3/2)  [6 FLOPS]
-                const auto f_x = _mm256_mul_ps(m_r3, dx);
-                const auto f_y = _mm256_mul_ps(m_r3, dy);
-                const auto f_z = _mm256_mul_ps(m_r3, dz);
+                    // (m_1 * r_01) / (d^2 + e^2)^(3/2)  [6 FLOPS]
+                    const auto f_x = _mm256_mul_ps(m_r3, dx);
+                    const auto f_y = _mm256_mul_ps(m_r3, dy);
+                    const auto f_z = _mm256_mul_ps(m_r3, dz);
 
-                auto dv_x = _mm256_load_ps(dv_.x.data() + i);
-                auto dv_y = _mm256_load_ps(dv_.y.data() + i);
-                auto dv_z = _mm256_load_ps(dv_.z.data() + i);
+                    dv_x = _mm256_add_ps(dv_x, f_x);
+                    dv_y = _mm256_add_ps(dv_y, f_y);
+                    dv_z = _mm256_add_ps(dv_z, f_z);
 
-                dv_x = _mm256_add_ps(dv_x, f_x);
-                dv_y = _mm256_add_ps(dv_y, f_y);
-                dv_z = _mm256_add_ps(dv_z, f_z);
-
-                _mm256_store_ps(dv_.x.data() + i, dv_x);
-                _mm256_store_ps(dv_.y.data() + i, dv_y);
-                _mm256_store_ps(dv_.z.data() + i, dv_z);
+                    _mm256_store_ps(dv_.x.data() + i, dv_x);
+                    _mm256_store_ps(dv_.y.data() + i, dv_y);
+                    _mm256_store_ps(dv_.z.data() + i, dv_z);
+                }
             }
         }
 
-        const auto damping_8 = _mm256_setr_ps(damping, damping, damping, damping, damping, damping, damping, damping);
-        const auto dt_8      = _mm256_setr_ps(dt, dt, dt, dt, dt, dt, dt, dt);
+        const auto damping_8 = _mm256_set1_ps(damping);
+        const auto dt_8      = _mm256_set1_ps(dt);
 
         const auto integrate = [&]<auto Dim> {
 #pragma omp parallel for
@@ -299,7 +292,7 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
         }
     }
 
-    std::println("{}", (current_clock_cycle() - cycle_start) / nb_interactions);
+    // std::println("{}", (current_clock_cycle() - cycle_start) / nb_interactions);
 }
 
 template BodySystemCPU<float>;
