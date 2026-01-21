@@ -138,7 +138,7 @@ template <std::floating_point T> auto BodySystemCPU<T>::set_velocity(std::span<c
 }
 
 template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept -> void {
-    // const auto nb_interactions = nb_bodies_ * (nb_bodies_ - 1);
+    // const auto nb_interactions = nb_bodies_ * nb_bodies_;
 
     // const auto cycle_start = current_clock_cycle();
 
@@ -146,12 +146,12 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
     const auto softening_squared = softening_squared_;
     const auto damping           = damping_;
 
-    if constexpr (std::is_same_v<T, float>) {
-        // could separate 1st particles contribution and initialise dv there but doesnt noticeably improve performance
-        fill(dv_.x, T{0});
-        fill(dv_.y, T{0});
-        fill(dv_.z, T{0});
+    // could separate 1st particles contribution and initialise dv there but doesnt noticeably improve performance
+    fill(dv_.x, T{0});
+    fill(dv_.y, T{0});
+    fill(dv_.z, T{0});
 
+    if constexpr (std::is_same_v<T, float>) {
         {
             const auto softening_8 = _mm256_set1_ps(softening_squared);
 
@@ -235,61 +235,88 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
         integrate.operator()<&Coordinates<T>::y>();
         integrate.operator()<&Coordinates<T>::z>();
     } else {
-#pragma omp parallel for
-        for (int i = 0; i < nb_bodies; i++) {
-            auto       acc   = std::array<T, 3>{0, 0, 0};
-            const auto pos_i = std::array<T, 3>{positions_.x[i], positions_.y[i], positions_.z[i]};
+        {
+            const auto softening_4 = _mm256_set1_pd(softening_squared);
 
-            // We unroll this loop 4X for a small performance boost.
             for (auto j = 0; j < nb_bodies; ++j) {
-                // r_01  [3 FLOPS]
-                const auto dr = std::array{positions_.x[j] - pos_i[0], positions_.y[j] - pos_i[1], positions_.z[j] - pos_i[2]};
+                const auto pos_j_x = _mm256_set1_pd(positions_.x[j]);
+                const auto pos_j_y = _mm256_set1_pd(positions_.y[j]);
+                const auto pos_j_z = _mm256_set1_pd(positions_.z[j]);
 
-                // NOTE: sqrt and / (and r2) are long calculations
-                // breaking dependency chain by allowing them to be calculated separately increases performance ~10%
-
-                const auto dx2 = dr[0] * dr[0];
-                const auto dy2 = dr[1] * dr[1];
-                const auto dz2 = dr[2] * dr[2];
-
-                const auto dx2_dy2   = dx2 + dy2;
-                const auto dz2_soft2 = dz2 + softening_squared;
-
-                // d^2 + e^2 [6 FLOPS]
-                const auto r2 = dx2_dy2 + dz2_soft2;
-
-                // 1 FLOP
-                const auto r = std::sqrt(r2);
-
-                // 2 FLOPs
-                const auto m_r4 = masses_[j] / (r2 * r2);
-
-                // 1 FLOP
-                const auto s = m_r4 * r;
-
-                // (m_1 * r_01) / (d^2 + e^2)^(3/2)  [6 FLOPS]
-                acc[0] += dr[0] * s;
-                acc[1] += dr[1] * s;
-                acc[2] += dr[2] * s;
-            }
-
-            dv_.x[i] = acc[0] * dt;
-            dv_.y[i] = acc[1] * dt;
-            dv_.z[i] = acc[2] * dt;
-        }
+                const auto m_j = _mm256_set1_pd(masses_[j]);
 
 #pragma omp parallel for
-        for (auto i = std::size_t{0}; i < nb_bodies; ++i) {
-            // new velocity = old velocity + acceleration * dt
-            velocities_.x[i] = (velocities_.x[i] + dv_.x[i]) * damping;
-            velocities_.y[i] = (velocities_.y[i] + dv_.y[i]) * damping;
-            velocities_.z[i] = (velocities_.z[i] + dv_.z[i]) * damping;
+                for (auto i = std::size_t{0}; i < nb_bodies; i += 4) {
+                    const auto pos_i_x = _mm256_load_pd(positions_.x.data() + i);
+                    const auto pos_i_y = _mm256_load_pd(positions_.y.data() + i);
+                    const auto pos_i_z = _mm256_load_pd(positions_.z.data() + i);
 
-            // new position = old position + velocity * dt
-            positions_.x[i] += velocities_.x[i] * dt;
-            positions_.y[i] += velocities_.y[i] * dt;
-            positions_.z[i] += velocities_.z[i] * dt;
+                    auto dv_x = _mm256_load_pd(dv_.x.data() + i);
+                    auto dv_y = _mm256_load_pd(dv_.y.data() + i);
+                    auto dv_z = _mm256_load_pd(dv_.z.data() + i);
+
+                    // dr  [3 FLOPS]
+                    const auto dx = _mm256_sub_pd(pos_j_x, pos_i_x);
+                    const auto dy = _mm256_sub_pd(pos_j_y, pos_i_y);
+                    const auto dz = _mm256_sub_pd(pos_j_z, pos_i_z);
+
+                    // NOTE: sqrt and / (and r2) are long calculations
+                    // breaking dependency chain by allowing them to be calculated separately increases performance ~10%
+
+                    // d^2 + e^2 [6 FLOPS]
+                    const auto r2 = _mm256_add_pd(_mm256_add_pd(softening_4, _mm256_mul_pd(dx, dx)), _mm256_add_pd(_mm256_mul_pd(dy, dy), _mm256_mul_pd(dz, dz)));
+
+                    // 1 FLOP
+                    const auto r = _mm256_sqrt_pd(r2);
+
+                    // 2 FLOPs
+                    const auto m_r4 = _mm256_div_pd(m_j, _mm256_mul_pd(r2, r2));
+
+                    // 1 FLOP
+                    const auto m_r3 = _mm256_mul_pd(m_r4, r);
+
+                    // (m_1 * r_01) / (d^2 + e^2)^(3/2)  [6 FLOPS]
+                    const auto f_x = _mm256_mul_pd(m_r3, dx);
+                    const auto f_y = _mm256_mul_pd(m_r3, dy);
+                    const auto f_z = _mm256_mul_pd(m_r3, dz);
+
+                    dv_x = _mm256_add_pd(dv_x, f_x);
+                    dv_y = _mm256_add_pd(dv_y, f_y);
+                    dv_z = _mm256_add_pd(dv_z, f_z);
+
+                    _mm256_store_pd(dv_.x.data() + i, dv_x);
+                    _mm256_store_pd(dv_.y.data() + i, dv_y);
+                    _mm256_store_pd(dv_.z.data() + i, dv_z);
+                }
+            }
         }
+
+        const auto damping_4 = _mm256_set1_pd(damping);
+        const auto dt_4      = _mm256_set1_pd(dt);
+
+        const auto integrate = [&]<auto Dim> {
+#pragma omp parallel for
+            for (auto i = std::size_t{0}; i < nb_bodies; i += 4) {
+                auto dv  = _mm256_load_pd((dv_.*Dim).data() + i);
+                auto v   = _mm256_load_pd((velocities_.*Dim).data() + i);
+                auto pos = _mm256_load_pd((positions_.*Dim).data() + i);
+
+                dv = _mm256_mul_pd(dv, dt_4);
+
+                v = _mm256_add_pd(v, dv);
+                v = _mm256_mul_pd(v, damping_4);
+
+                auto delta_pos = _mm256_mul_pd(v, dt_4);
+                pos            = _mm256_add_pd(pos, delta_pos);
+
+                _mm256_store_pd((velocities_.*Dim).data() + i, v);
+                _mm256_store_pd((positions_.*Dim).data() + i, pos);
+            }
+        };
+
+        integrate.operator()<&Coordinates<T>::x>();
+        integrate.operator()<&Coordinates<T>::y>();
+        integrate.operator()<&Coordinates<T>::z>();
     }
 
     // std::println("{}", (current_clock_cycle() - cycle_start) / nb_interactions);
