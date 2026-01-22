@@ -60,7 +60,7 @@ __device__ auto rsqrt_(double x) -> double {
     return rsqrt(x);
 }
 
-template <std::floating_point T> __device__ auto body_body_interaction(vec3<T> ai, vec4<T> bi, vec4<T> bj) -> vec3<T> {
+template <std::floating_point T> __device__ auto body_body_interaction(vec3<T>& ai, const vec4<T>& bi, const vec4<T>& bj) -> void {
     const auto r = vec3<T>{bj.x - bi.x, bj.y - bi.y, bj.z - bi.z};
 
     // r_ij  [3 FLOPS]
@@ -83,11 +83,9 @@ template <std::floating_point T> __device__ auto body_body_interaction(vec3<T> a
     ai.x += r.x * s;
     ai.y += r.y * s;
     ai.z += r.z * s;
-
-    return ai;
 }
 
-template <std::floating_point T> __device__ auto compute_body_accel(vec4<T> body_pos, const vec4<T>* positions, cg::thread_block cta) -> vec3<T> {
+template <std::floating_point T> __device__ auto compute_body_accel(const vec4<T>& body_pos, const vec4<T>* positions, const cg::thread_block& cta) -> vec3<T> {
     __shared__ vec4<T> sharedPos[block_size];
 
     auto acc = vec3<T>{0, 0, 0};
@@ -100,7 +98,7 @@ template <std::floating_point T> __device__ auto compute_body_accel(vec4<T> body
 // This is the "tile_calculation" from the GPUG3 article.
 #pragma unroll 128
         for (auto counter = 0u; counter < blockDim.x; ++counter) {
-            acc = body_body_interaction<T>(acc, body_pos, sharedPos[counter]);
+            body_body_interaction<T>(acc, body_pos, sharedPos[counter]);
         }
 
         cg::sync(cta);
