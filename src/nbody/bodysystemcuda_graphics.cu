@@ -9,7 +9,7 @@
 
 #include <cassert>
 
-template <std::floating_point T> BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
+template <std::floating_point T> BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, params) {
     BodySystemCUDAGraphics<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
@@ -19,7 +19,7 @@ template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaT
 
         const auto& position_ptrs = device_mapping.pointers();
 
-        integrateNbodySystem<T>(position_ptrs[1 - this->current_read_], position_ptrs[this->current_read_], device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
+        integrateNbodySystem<T>(position_ptrs[1 - this->current_read_], position_ptrs[this->current_read_], device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_);
     }
 
     std::swap(this->current_read_, this->current_write_);

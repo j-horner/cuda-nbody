@@ -11,7 +11,7 @@
 ///
 template <std::floating_point T> class BodySystemCUDAHostMemory : public BodySystemCUDA<T> {
  public:
-    BodySystemCUDAHostMemory(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
+    BodySystemCUDAHostMemory(unsigned int nb_bodies, const NBodyParams& params);
 
     auto update(T deltaTime) -> void final;
 

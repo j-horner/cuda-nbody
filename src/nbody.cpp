@@ -261,7 +261,6 @@ struct Options {
     bool        qatest     = false;
     bool        cpu        = false;
     std::size_t iterations = 0;
-    int         block_size = 0;
 };
 
 auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
@@ -280,7 +279,6 @@ auto parse_args(int argc, char** argv) -> std::pair<Status, Options> {
     app.add_flag("--qatest", options.qatest, "Runs a QA test");
     app.add_flag("--cpu", options.cpu, "Run n-body simulation on the CPU");
     app.add_option("-i,--iterations", options.iterations, "Number of iterations to run in the benchmark")->default_val(10);
-    app.add_option("--blockSize", options.block_size, "The CUDA kernel block size")->default_val(256);
 
     // cppcheck-suppress unmatchedSuppression
     // cppcheck-suppress passedByValue
@@ -359,7 +357,7 @@ auto main(int argc, char** argv) -> int {
 
         const auto compare_to_cpu = (cmd_options.compare || cmd_options.qatest) && (!cmd_options.cpu);
 
-        auto compute = Compute(cmd_options.fp64, cycle_demo, cmd_options.cpu, compare_to_cpu, cmd_options.benchmark, cmd_options.hostmem, cmd_options.block_size, cmd_options.numbodies);
+        auto compute = Compute(cmd_options.fp64, cycle_demo, cmd_options.cpu, compare_to_cpu, cmd_options.benchmark, cmd_options.hostmem, cmd_options.numbodies);
 
         if (cmd_options.benchmark) {
             const auto nb_iterations = cmd_options.iterations == 0 ? 10 : static_cast<int>(cmd_options.iterations);

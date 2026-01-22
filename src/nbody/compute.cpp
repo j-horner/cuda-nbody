@@ -23,14 +23,14 @@ auto Compute::operator=(Compute&&) noexcept -> Compute& = default;
 
 Compute::~Compute() noexcept = default;
 
-Compute::Compute(bool enable_fp64, bool enable_cycle_demo, bool enable_cpu, bool enable_compare_to_cpu, bool enable_benchmark, bool enable_host_memory, int block_size, std::size_t nb_bodies)
+Compute::Compute(bool enable_fp64, bool enable_cycle_demo, bool enable_cpu, bool enable_compare_to_cpu, bool enable_benchmark, bool enable_host_memory, std::size_t nb_bodies)
     : fp64_enabled_(enable_fp64), cycle_demo_(enable_cycle_demo), use_cpu_(enable_cpu) {
     const auto use_pbo = !(enable_benchmark || enable_compare_to_cpu || enable_host_memory || enable_cpu);
 
     if (use_cpu_) {
         compute_cpu_ = std::make_unique<ComputeCPU>(enable_fp64, nb_bodies, active_params_);
     } else {
-        compute_cuda_ = std::make_unique<ComputeCUDA>(enable_host_memory, use_pbo, block_size, enable_fp64, nb_bodies, active_params_);
+        compute_cuda_ = std::make_unique<ComputeCUDA>(enable_host_memory, use_pbo, enable_fp64, nb_bodies, active_params_);
     }
 
     if (use_cpu_) {

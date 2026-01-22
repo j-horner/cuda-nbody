@@ -47,7 +47,7 @@ template <std::floating_point T> auto set_softening(T softening) -> void {
 
 }    // namespace
 
-template <std::floating_point T> BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : nb_bodies_(nb_bodies), block_size_(blockSize), damping_(params.damping) {
+template <std::floating_point T> BodySystemCUDA<T>::BodySystemCUDA(unsigned int nb_bodies, const NBodyParams& params) : nb_bodies_(nb_bodies), damping_(params.damping) {
     set_softening(static_cast<T>(params.softening));
 }
 

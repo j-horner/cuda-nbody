@@ -1,5 +1,6 @@
 #include "compute_cuda.hpp"
 
+#include "block_size.hpp"
 #include "bodysystemcpu.hpp"
 #include "bodysystemcuda.hpp"
 #include "bodysystemcuda_default.hpp"
@@ -49,7 +50,7 @@ auto get_main_device() -> cuda::device_t {
 
 }    // namespace
 
-ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params)
+ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params)
     : fp64_enabled_(fp64_enabled), use_host_mem_(enable_host_mem), use_pbo_(use_pbo), host_mem_sync_event_(cuda::event::create(cuda::device::current::get())), start_event_(cuda::event::create(cuda::device::current::get())),
       stop_event_(cuda::event::create(cuda::device::current::get())) {
     const auto main_device = cuda::device::current::get();
@@ -88,7 +89,7 @@ ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, dou
         assert(nb_bodies_ >= 1);
 
         if (nb_bodies_ % block_size) {
-            auto new_nb_bodies = ((nb_bodies_ / block_size) + 1) * block_size;
+            const auto new_nb_bodies = ((nb_bodies_ / block_size) + 1) * block_size;
             std::println(R"(Warning: "number of bodies" specified {} is not a multiple of {}.)", nb_bodies_, block_size);
             std::println("Rounding up to the nearest multiple: {}.", new_nb_bodies);
             nb_bodies_ = new_nb_bodies;
@@ -97,7 +98,7 @@ ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, dou
         }
     } else {
         // default number of bodies is #SMs * 4 * CTA size
-        nb_bodies_ = num_bodies != 0 ? num_bodies : block_size * 4 * main_device.multiprocessor_count();
+        nb_bodies_ = num_bodies != 0 ? num_bodies : (block_size * 4) * main_device.multiprocessor_count();
     }
 
     std::println("> Simulation data stored in {} memory", use_host_mem_ ? "system" : "video");
@@ -106,10 +107,10 @@ ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, dou
     const auto allocate_nbody = [&]<template <std::floating_point> typename BodySystem>() {
         const auto n_bodies = static_cast<unsigned int>(nb_bodies_);
 
-        nbody_fp32_ = std::make_unique<BodySystem<float>>(n_bodies, block_size, params);
+        nbody_fp32_ = std::make_unique<BodySystem<float>>(n_bodies, params);
 
         if (double_supported_) {
-            nbody_fp64_ = std::make_unique<BodySystem<double>>(n_bodies, block_size, params);
+            nbody_fp64_ = std::make_unique<BodySystem<double>>(n_bodies, params);
         }
     };
 

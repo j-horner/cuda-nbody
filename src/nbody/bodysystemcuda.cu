@@ -25,6 +25,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "block_size.hpp"
 #include "vec.hpp"
 
 // CUDA standard includes
@@ -183,12 +184,12 @@ template <std::floating_point T> __global__ void integrateBodies(vec4<T>* __rest
     vel[index]    = velocity;
 }
 
-template <std::floating_point T> void integrateNbodySystem(T* new_positions, const T* old_positions, T* velocities, unsigned int currentRead, T deltaTime, T damping, unsigned int numBodies, int blockSize) {
+template <std::floating_point T> void integrateNbodySystem(T* new_positions, const T* old_positions, T* velocities, unsigned int currentRead, T deltaTime, T damping, unsigned int numBodies) {
     {
-        const auto numBlocks     = (numBodies + blockSize - 1) / blockSize;
-        const auto sharedMemSize = blockSize * 4 * sizeof(T);    // 4 floats for pos
+        const auto numBlocks     = (numBodies + block_size - 1) / block_size;
+        const auto sharedMemSize = block_size * 4 * sizeof(T);    // 4 floats for pos
 
-        integrateBodies<T><<<numBlocks, blockSize, sharedMemSize>>>(
+        integrateBodies<T><<<numBlocks, block_size, sharedMemSize>>>(
             reinterpret_cast<vec4<T>*>(new_positions),
             reinterpret_cast<const vec4<T>*>(old_positions),
             reinterpret_cast<vec4<T>*>(velocities),
@@ -214,7 +215,5 @@ template <std::floating_point T> void integrateNbodySystem(T* new_positions, con
     }
 }
 
-// Explicit specializations needed to generate code
-template void integrateNbodySystem<float>(float* new_positions, const float* old_positions, float* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies, int blockSize);
-
-template void integrateNbodySystem<double>(double* new_positions, const double* old_positions, double* velocities, unsigned int currentRead, double deltaTime, double damping, unsigned int numBodies, int blockSize);
+template void integrateNbodySystem<float>(float* new_positions, const float* old_positions, float* velocities, unsigned int currentRead, float deltaTime, float damping, unsigned int numBodies);
+template void integrateNbodySystem<double>(double* new_positions, const double* old_positions, double* velocities, unsigned int currentRead, double deltaTime, double damping, unsigned int numBodies);
