@@ -68,7 +68,7 @@ template <std::floating_point T> __device__ auto body_body_interaction(vec3<T>& 
     const auto r2 = (softening_squared<T> + dr.x * dr.x) + (dr.y * dr.y + dr.z * dr.z);
 
     // [4 FLOP]
-    const auto m_r3 = (bj.w / (r2 * r2)) * std::sqrt(r2);
+    const auto m_r3 = bj.w * rsqrt_(r2 * r2 * r2);
 
     // [6 FLOPS]
     ai.x += dr.x * m_r3;
