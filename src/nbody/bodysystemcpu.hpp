@@ -68,7 +68,6 @@ template <std::floating_point T> class BodySystemCPU {
 
     Coordinates<T>         positions_{nb_bodies_};
     Coordinates<T>         velocities_{nb_bodies_};
-    Coordinates<T>         dv_{nb_bodies_};
     Coordinates<T>::Vector masses_ = Coordinates<T>::Vector(nb_bodies_);
 
     T softening_squared_ = 0.00125f;

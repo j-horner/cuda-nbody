@@ -117,12 +117,10 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
 
     const auto nb_bodies = static_cast<int>(nb_bodies_);
 
-    // could separate 1st particles contribution and initialise dv there but doesnt noticeably improve performance
-    fill(dv_.x, T{0});
-    fill(dv_.y, T{0});
-    fill(dv_.z, T{0});
+    const auto dt_ = xs::batch<T>{dt};
 
     {
+        const auto damping           = xs::batch<T>{damping_};
         const auto softening_squared = xs::batch<T>{softening_squared_};
 
 #pragma omp parallel for
@@ -131,10 +129,11 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
             const auto pos_i_y = xs::load_aligned(positions_.y.data() + i);
             const auto pos_i_z = xs::load_aligned(positions_.z.data() + i);
 
-            auto dv_x = xs::load_aligned(dv_.x.data() + i);
-            auto dv_y = xs::load_aligned(dv_.y.data() + i);
-            auto dv_z = xs::load_aligned(dv_.z.data() + i);
+            auto dv_x = xs::batch<T>{0};
+            auto dv_y = xs::batch<T>{0};
+            auto dv_z = xs::batch<T>{0};
 
+            // calculate the acceleration for each of the 8/16 i-particles caused by each j-particle
             for (auto j = 0; j < nb_bodies; ++j) {
                 // dr  [3 FLOPS]
                 const auto dx = xs::batch<T>{positions_.x[j]} - pos_i_x;
@@ -155,25 +154,33 @@ template <std::floating_point T> auto BodySystemCPU<T>::update(T dt) noexcept ->
                 dv_y += (m_r3 * dy);
                 dv_z += (m_r3 * dz);
             }
-            dv_x.store_aligned(dv_.x.data() + i);
-            dv_y.store_aligned(dv_.y.data() + i);
-            dv_z.store_aligned(dv_.z.data() + i);
+
+            dv_x *= dt_;
+            dv_y *= dt_;
+            dv_z *= dt_;
+
+            auto v_x = xs::load_aligned(velocities_.x.data() + i);
+            auto v_y = xs::load_aligned(velocities_.y.data() + i);
+            auto v_z = xs::load_aligned(velocities_.z.data() + i);
+
+            v_x += dv_x;
+            v_y += dv_y;
+            v_z += dv_z;
+
+            v_x *= damping;
+            v_y *= damping;
+            v_z *= damping;
+
+            v_x.store_aligned(velocities_.x.data() + i);
+            v_y.store_aligned(velocities_.y.data() + i);
+            v_z.store_aligned(velocities_.z.data() + i);
         }
     }
 
-    const auto damping = xs::batch<T>{damping_};
-    const auto dt_     = xs::batch<T>{dt};
-
     const auto integrate = [&]<auto Dim> {
         for (auto i = 0; i < nb_bodies; i += stride) {
-            auto dv  = xs::load_aligned((dv_.*Dim).data() + i);
             auto v   = xs::load_aligned((velocities_.*Dim).data() + i);
             auto pos = xs::load_aligned((positions_.*Dim).data() + i);
-
-            dv *= dt_;
-
-            v += dv;
-            v *= damping;
 
             pos += (v * dt_);
 
