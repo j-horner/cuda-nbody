@@ -13,13 +13,6 @@ template <std::floating_point T> BodySystemCUDAGraphics<T>::BodySystemCUDAGraphi
     BodySystemCUDAGraphics<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
-template <std::floating_point T>
-BodySystemCUDAGraphics<T>::BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
-    set_position(this->host_pos_vec_);
-    set_velocity(this->host_vel_vec_);
-}
-
 template <std::floating_point T> auto BodySystemCUDAGraphics<T>::update(T deltaTime) -> void {
     {
         const auto device_mapping = graphics_resources_.map<T>(std::array{CUDAGraphicsFlag{this->current_read_, cudaGraphicsMapFlagsReadOnly}, CUDAGraphicsFlag{1 - this->current_read_, cudaGraphicsMapFlagsWriteDiscard}});

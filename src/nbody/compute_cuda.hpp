@@ -23,17 +23,6 @@ class ComputeCUDA {
  public:
     ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
 
-    ComputeCUDA(bool                enable_host_mem,
-                bool                use_pbo,
-                int                 block_size,
-                double              fp64_enabled,
-                std::size_t         num_bodies,
-                const NBodyParams&  params,
-                std::vector<float>  positions_fp32,
-                std::vector<float>  velocities_fp32,
-                std::vector<double> positions_fp64,
-                std::vector<double> velocities_fp64);
-
     auto nb_bodies() const noexcept { return nb_bodies_; }
     auto use_pbo() const noexcept { return use_pbo_; }
     auto use_host_mem() const noexcept { return use_host_mem_; }

@@ -50,19 +50,6 @@ auto get_main_device() -> cuda::device_t {
 }    // namespace
 
 ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, int block_size, double fp64_enabled, std::size_t num_bodies, const NBodyParams& params)
-    : ComputeCUDA(enable_host_mem, use_pbo, block_size, fp64_enabled, num_bodies, params, {}, {}, {}, {}) {}
-
-ComputeCUDA::ComputeCUDA(
-    bool                enable_host_mem,
-    bool                use_pbo,
-    int                 block_size,
-    double              fp64_enabled,
-    std::size_t         num_bodies,
-    const NBodyParams&  params,
-    std::vector<float>  positions_fp32,
-    std::vector<float>  velocities_fp32,
-    std::vector<double> positions_fp64,
-    std::vector<double> velocities_fp64)
     : fp64_enabled_(fp64_enabled), use_host_mem_(enable_host_mem), use_pbo_(use_pbo), host_mem_sync_event_(cuda::event::create(cuda::device::current::get())), start_event_(cuda::event::create(cuda::device::current::get())),
       stop_event_(cuda::event::create(cuda::device::current::get())) {
     const auto main_device = cuda::device::current::get();
@@ -119,18 +106,10 @@ ComputeCUDA::ComputeCUDA(
     const auto allocate_nbody = [&]<template <std::floating_point> typename BodySystem>() {
         const auto n_bodies = static_cast<unsigned int>(nb_bodies_);
 
-        if (!positions_fp32.empty()) {
-            nbody_fp32_ = std::make_unique<BodySystem<float>>(n_bodies, block_size, params, std::move(positions_fp32), std::move(velocities_fp32));
+        nbody_fp32_ = std::make_unique<BodySystem<float>>(n_bodies, block_size, params);
 
-            if (double_supported_) {
-                nbody_fp64_ = std::make_unique<BodySystem<double>>(n_bodies, block_size, params, std::move(positions_fp64), std::move(velocities_fp64));
-            }
-        } else {
-            nbody_fp32_ = std::make_unique<BodySystem<float>>(n_bodies, block_size, params);
-
-            if (double_supported_) {
-                nbody_fp64_ = std::make_unique<BodySystem<double>>(n_bodies, block_size, params);
-            }
+        if (double_supported_) {
+            nbody_fp64_ = std::make_unique<BodySystem<double>>(n_bodies, block_size, params);
         }
     };
 

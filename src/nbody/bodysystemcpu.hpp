@@ -46,8 +46,6 @@ template <std::floating_point T> class BodySystemCPU {
 
     BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params);
 
-    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::span<const T> positions, std::span<const T> velocities);
-
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
     auto update(T dt) noexcept -> void;

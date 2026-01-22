@@ -70,13 +70,6 @@ BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params
     reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
-template <std::floating_point T>
-BodySystemCPU<T>::BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::span<const T> positions, std::span<const T> velocities)
-    : nb_bodies_(nb_bodies), softening_squared_(static_cast<T>(params.softening) * params.softening), damping_(params.damping) {
-    set_position(positions);
-    set_velocity(velocities);
-}
-
 template <std::floating_point T> auto BodySystemCPU<T>::reset(const NBodyParams& params, NBodyConfig config) -> void {
     randomise_bodies<T>(config, positions_, velocities_, masses_, params.cluster_scale, params.velocity_scale);
 }
