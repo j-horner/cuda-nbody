@@ -1,3 +1,3 @@
 #pragma once
 
-constexpr static auto block_size = 256u;
+constexpr static auto block_size = 512u;

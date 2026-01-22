@@ -83,21 +83,17 @@ ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, double fp64_enabled
         throw std::invalid_argument("One or more of the requested devices does not support double precision floating-point");
     }
 
-    if (num_bodies != 0u) {
-        nb_bodies_ = num_bodies;
+    if (num_bodies == 0u) {
+        nb_bodies_ = main_device.multiprocessor_count() * 4096;
+    }
 
-        assert(nb_bodies_ >= 1);
-
-        if (nb_bodies_ % block_size) {
-            const auto new_nb_bodies = ((nb_bodies_ / block_size) + 1) * block_size;
-            std::println(R"(Warning: "number of bodies" specified {} is not a multiple of {}.)", nb_bodies_, block_size);
-            std::println("Rounding up to the nearest multiple: {}.", new_nb_bodies);
-            nb_bodies_ = new_nb_bodies;
-        } else {
-            std::println("number of bodies = {}", nb_bodies_);
-        }
+    if (nb_bodies_ % block_size) {
+        const auto new_nb_bodies = ((nb_bodies_ / block_size) + 1) * block_size;
+        std::println(R"(Warning: "number of bodies" specified {} is not a multiple of {}.)", nb_bodies_, block_size);
+        std::println("Rounding up to the nearest multiple: {}.", new_nb_bodies);
+        nb_bodies_ = new_nb_bodies;
     } else {
-        nb_bodies_ = (block_size * 16) * main_device.multiprocessor_count();
+        std::println("number of bodies = {}", nb_bodies_);
     }
 
     std::println("> Simulation data stored in {} memory", use_host_mem_ ? "system" : "video");
