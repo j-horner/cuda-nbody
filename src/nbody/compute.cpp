@@ -13,7 +13,7 @@
 
 namespace {
 constexpr auto flops_per_interaction(bool fp64_enabled) {
-    return fp64_enabled ? 30 : 20;
+    return fp64_enabled ? 29 : 19;
 }
 }    // namespace
 

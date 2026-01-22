@@ -61,44 +61,33 @@ __device__ auto rsqrt_(double x) -> double {
 }
 
 template <std::floating_point T> __device__ auto body_body_interaction(vec3<T>& ai, const vec4<T>& bi, const vec4<T>& bj) -> void {
-    const auto r = vec3<T>{bj.x - bi.x, bj.y - bi.y, bj.z - bi.z};
+    // [3 FLOPS]
+    const auto dr = vec3<T>{bj.x - bi.x, bj.y - bi.y, bj.z - bi.z};
 
-    // r_ij  [3 FLOPS]
-    // r.x = bj.x - bi.x;
-    // r.y = bj.y - bi.y;
-    // r.z = bj.z - bi.z;
+    // [6 FLOPS]
+    const auto r2 = (softening_squared<T> + dr.x * dr.x) + (dr.y * dr.y + dr.z * dr.z);
 
-    // distSqr = dot(r_ij, r_ij) + EPS^2  [6 FLOPS]
-    const auto dist_sqr = (softening_squared<T> + r.x * r.x) + (r.y * r.y + r.z * r.z);
-    // distSqr += softening_squared<T>;
+    // [4 FLOP]
+    const auto m_r3 = (bj.w / (r2 * r2)) * std::sqrt(r2);
 
-    // invDistCube =1/distSqr^(3/2)  [4 FLOPS (2 mul, 1 sqrt, 1 inv)]
-    const auto inv_dist      = rsqrt_(dist_sqr);
-    const auto inv_dist_cube = inv_dist * inv_dist * inv_dist;
-
-    // s = m_j * invDistCube [1 FLOP]
-    const auto s = bj.w * inv_dist_cube;
-
-    // a_i =  a_i + s * r_ij [6 FLOPS]
-    ai.x += r.x * s;
-    ai.y += r.y * s;
-    ai.z += r.z * s;
+    // [6 FLOPS]
+    ai.x += dr.x * m_r3;
+    ai.y += dr.y * m_r3;
+    ai.z += dr.z * m_r3;
 }
 
 template <std::floating_point T> __device__ auto compute_body_accel(const vec4<T>& body_pos, const vec4<T>* positions, const cg::thread_block& cta) -> vec3<T> {
-    __shared__ vec4<T> sharedPos[block_size];
+    __shared__ vec4<T> shared_pos[block_size];
 
     auto acc = vec3<T>{0, 0, 0};
 
     for (auto tile = 0; tile < gridDim.x; ++tile) {
-        sharedPos[threadIdx.x] = positions[tile * blockDim.x + threadIdx.x];
+        shared_pos[threadIdx.x] = positions[tile * blockDim.x + threadIdx.x];
 
         cg::sync(cta);
 
-// This is the "tile_calculation" from the GPUG3 article.
-#pragma unroll 128
         for (auto counter = 0u; counter < blockDim.x; ++counter) {
-            body_body_interaction<T>(acc, body_pos, sharedPos[counter]);
+            body_body_interaction<T>(acc, body_pos, shared_pos[counter]);
         }
 
         cg::sync(cta);
