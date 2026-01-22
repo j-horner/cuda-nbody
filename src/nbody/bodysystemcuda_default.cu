@@ -10,7 +10,7 @@ template <std::floating_point T> BodySystemCUDADefault<T>::BodySystemCUDADefault
 }
 
 template <std::floating_point T> auto BodySystemCUDADefault<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(device_pos_[1 - this->current_read_].data().get(), device_pos_[this->current_read_].data().get(), device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_);
+    integrateNbodySystem<T>(device_pos_[1 - this->current_read_].data().get(), device_pos_[this->current_read_].data().get(), device_vel_.data().get(), deltaTime, this->damping_, this->nb_bodies_);
 
     std::swap(this->current_read_, this->current_write_);
 }

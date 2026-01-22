@@ -11,7 +11,7 @@ template <std::floating_point T> BodySystemCUDAHostMemory<T>::BodySystemCUDAHost
 }
 
 template <std::floating_point T> auto BodySystemCUDAHostMemory<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<T>(positions_[1 - this->current_read_].device_ptr(), positions_[this->current_read_].device_ptr(), velocities_.device_ptr(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_);
+    integrateNbodySystem<T>(positions_[1 - this->current_read_].device_ptr(), positions_[this->current_read_].device_ptr(), velocities_.device_ptr(), deltaTime, this->damping_, this->nb_bodies_);
 
     std::swap(this->current_read_, this->current_write_);
 }
