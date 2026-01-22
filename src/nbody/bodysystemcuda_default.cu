@@ -5,20 +5,12 @@
 
 #include <cassert>
 
-template <std::floating_point T> BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, blockSize, params) {
+template <std::floating_point T> BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, const NBodyParams& params) : BodySystemCUDA<T>(nb_bodies, params) {
     BodySystemCUDADefault<T>::reset(params, NBodyConfig::NBODY_CONFIG_SHELL);
 }
 
-template <std::floating_point T>
-BodySystemCUDADefault<T>::BodySystemCUDADefault(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities)
-    : BodySystemCUDA<T>(nb_bodies, blockSize, params, std::move(positions), std::move(velocities)) {
-    set_position(this->host_pos_vec_);
-    set_velocity(this->host_vel_vec_);
-}
-
 template <std::floating_point T> auto BodySystemCUDADefault<T>::update(T deltaTime) -> void {
-    integrateNbodySystem<
-        T>(device_pos_[1 - this->current_read_].data().get(), device_pos_[this->current_read_].data().get(), device_vel_.data().get(), this->current_read_, deltaTime, this->damping_, this->nb_bodies_, this->block_size_);
+    integrateNbodySystem<T>(device_pos_[1 - this->current_read_].data().get(), device_pos_[this->current_read_].data().get(), device_vel_.data().get(), deltaTime, this->damping_, this->nb_bodies_);
 
     std::swap(this->current_read_, this->current_write_);
 }

@@ -5,44 +5,22 @@
 
 #include <print>
 
-ComputeCPU::ComputeCPU(double fp64_enabled, std::size_t num_bodies, const NBodyParams& params) : ComputeCPU(fp64_enabled, num_bodies, params, {}, {}, {}, {}) {}
-
-ComputeCPU::ComputeCPU(double              fp64_enabled,
-                       std::size_t         num_bodies,
-                       const NBodyParams&  params,
-                       std::vector<float>  positions_fp32,
-                       std::vector<float>  velocities_fp32,
-                       std::vector<double> positions_fp64,
-                       std::vector<double> velocities_fp64)
-    : fp64_enabled_(fp64_enabled) {
-#ifdef OPENMP
-    std::println("> Simulation with CPU using OpenMP");
-#else
+ComputeCPU::ComputeCPU(double fp64_enabled, std::size_t num_bodies, const NBodyParams& params) : fp64_enabled_(fp64_enabled) {
     std::println("> Simulation with CPU");
-#endif
 
     std::println("> Simulation data stored in system memory");
     std::println("> {} precision floating point simulation", fp64_enabled ? "Double" : "Single");
     std::println("> 0 Devices used for simulation");
 
-#ifdef OPENMP
-    num_bodies_ = 8192;
-#else
-    nb_bodies_ = 4096;
-#endif
+    nb_bodies_ = 8192;
 
     if (num_bodies != 0u) {
         nb_bodies_ = num_bodies;
         std::println("number of bodies = {}", nb_bodies_);
     }
 
-    if (!positions_fp64.empty()) {
-        nbody_fp32_ = std::make_unique<BodySystemCPU<float>>(nb_bodies_, params, std::move(positions_fp32), std::move(velocities_fp32));
-        nbody_fp64_ = std::make_unique<BodySystemCPU<double>>(nb_bodies_, params, std::move(positions_fp64), std::move(velocities_fp64));
-    } else {
-        nbody_fp32_ = std::make_unique<BodySystemCPU<float>>(nb_bodies_, params);
-        nbody_fp64_ = std::make_unique<BodySystemCPU<double>>(nb_bodies_, params);
-    }
+    nbody_fp32_ = std::make_unique<BodySystemCPU<float>>(nb_bodies_, params);
+    nbody_fp64_ = std::make_unique<BodySystemCPU<double>>(nb_bodies_, params);
 
     reset_time_ = Clock::now();
 }

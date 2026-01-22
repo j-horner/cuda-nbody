@@ -16,15 +16,7 @@ class ParamListGL;
 
 class Compute {
  public:
-    Compute(bool                         enable_fp64,
-            bool                         enable_cycle_demo,
-            bool                         enable_cpu,
-            bool                         enable_compare_to_cpu,
-            bool                         enable_benchmark,
-            bool                         enable_host_memory,
-            int                          block_size,
-            std::size_t                  nb_bodies,
-            const std::filesystem::path& tipsy_file);
+    Compute(bool enable_fp64, bool enable_cycle_demo, bool enable_cpu, bool enable_compare_to_cpu, bool enable_benchmark, bool enable_host_memory, std::size_t nb_bodies);
 
     Compute(const Compute&) = delete;
     Compute(Compute&&) noexcept;

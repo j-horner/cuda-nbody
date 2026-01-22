@@ -6,7 +6,6 @@
 #include "interface.hpp"
 #include "param.hpp"
 #include "paramgl.hpp"
-#include "tipsy.hpp"
 
 #include <chrono>
 #include <memory>
@@ -14,7 +13,7 @@
 
 namespace {
 constexpr auto flops_per_interaction(bool fp64_enabled) {
-    return fp64_enabled ? 30 : 20;
+    return fp64_enabled ? 29 : 19;
 }
 }    // namespace
 
@@ -24,45 +23,14 @@ auto Compute::operator=(Compute&&) noexcept -> Compute& = default;
 
 Compute::~Compute() noexcept = default;
 
-Compute::Compute(bool                         enable_fp64,
-                 bool                         enable_cycle_demo,
-                 bool                         enable_cpu,
-                 bool                         enable_compare_to_cpu,
-                 bool                         enable_benchmark,
-                 bool                         enable_host_memory,
-                 int                          block_size,
-                 std::size_t                  nb_bodies,
-                 const std::filesystem::path& tipsy_file)
+Compute::Compute(bool enable_fp64, bool enable_cycle_demo, bool enable_cpu, bool enable_compare_to_cpu, bool enable_benchmark, bool enable_host_memory, std::size_t nb_bodies)
     : fp64_enabled_(enable_fp64), cycle_demo_(enable_cycle_demo), use_cpu_(enable_cpu) {
     const auto use_pbo = !(enable_benchmark || enable_compare_to_cpu || enable_host_memory || enable_cpu);
-    if (!tipsy_file.empty()) {
-        auto [positions, velocities] = read_tipsy_file(tipsy_file);
 
-        tipsy_data_fp32_.positions.resize(positions.size());
-        tipsy_data_fp32_.velocities.resize(velocities.size());
-
-        using std::ranges::transform;
-
-        constexpr auto to_float = [](double x) noexcept { return static_cast<float>(x); };
-
-        transform(positions, tipsy_data_fp32_.positions.begin(), to_float);
-        transform(velocities, tipsy_data_fp32_.velocities.begin(), to_float);
-
-        tipsy_data_fp64_.positions  = std::move(positions);
-        tipsy_data_fp64_.velocities = std::move(velocities);
-
-        if (use_cpu_) {
-            compute_cpu_ = std::make_unique<ComputeCPU>(enable_fp64, nb_bodies, active_params_, tipsy_data_fp32_.positions, tipsy_data_fp32_.velocities, tipsy_data_fp64_.positions, tipsy_data_fp64_.velocities);
-        } else {
-            compute_cuda_ = std::make_unique<
-                ComputeCUDA>(enable_host_memory, use_pbo, block_size, enable_fp64, nb_bodies, active_params_, tipsy_data_fp32_.positions, tipsy_data_fp32_.velocities, tipsy_data_fp64_.positions, tipsy_data_fp64_.velocities);
-        }
+    if (use_cpu_) {
+        compute_cpu_ = std::make_unique<ComputeCPU>(enable_fp64, nb_bodies, active_params_);
     } else {
-        if (use_cpu_) {
-            compute_cpu_ = std::make_unique<ComputeCPU>(enable_fp64, nb_bodies, active_params_);
-        } else {
-            compute_cuda_ = std::make_unique<ComputeCUDA>(enable_host_memory, use_pbo, block_size, enable_fp64, nb_bodies, active_params_);
-        }
+        compute_cuda_ = std::make_unique<ComputeCUDA>(enable_host_memory, use_pbo, enable_fp64, nb_bodies, active_params_);
     }
 
     if (use_cpu_) {
@@ -91,12 +59,10 @@ Compute::Compute(bool                         enable_fp64,
         active_params_.velocity_scale = 11.f;
     }
 
-    if (tipsy_file.empty()) {
-        if (use_cpu_) {
-            compute_cpu_->reset(active_params_, NBodyConfig::NBODY_CONFIG_SHELL);
-        } else {
-            compute_cuda_->reset(active_params_, NBodyConfig::NBODY_CONFIG_SHELL);
-        }
+    if (use_cpu_) {
+        compute_cpu_->reset(active_params_, NBodyConfig::NBODY_CONFIG_SHELL);
+    } else {
+        compute_cuda_->reset(active_params_, NBodyConfig::NBODY_CONFIG_SHELL);
     }
 
     demo_reset_time_ = Clock::now();

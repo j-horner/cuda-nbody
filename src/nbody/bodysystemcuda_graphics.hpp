@@ -13,8 +13,7 @@
 ///
 template <std::floating_point T> class BodySystemCUDAGraphics : public BodySystemCUDA<T> {
  public:
-    BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
-    BodySystemCUDAGraphics(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCUDAGraphics(unsigned int nb_bodies, const NBodyParams& params);
 
     auto update(T deltaTime) -> void final;
 

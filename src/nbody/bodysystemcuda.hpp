@@ -40,8 +40,7 @@ template <std::floating_point T> class BodySystemCUDA {
     using Type                    = T;
     constexpr static auto use_cpu = false;
 
-    BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params);
-    BodySystemCUDA(unsigned int nb_bodies, unsigned int blockSize, const NBodyParams& params, std::vector<T> positions, std::vector<T> velocities);
+    BodySystemCUDA(unsigned int nb_bodies, const NBodyParams& params);
 
     auto virtual get_position() const -> std::span<const T> = 0;
     auto virtual get_velocity() const -> std::span<const T> = 0;
@@ -60,15 +59,13 @@ template <std::floating_point T> class BodySystemCUDA {
  protected:
     unsigned int nb_bodies_;
 
-    std::vector<T> host_pos_vec_;
-    std::vector<T> host_vel_vec_;
+    std::vector<T> host_pos_vec_ = std::vector<T>(4 * nb_bodies_, T{0});
+    std::vector<T> host_vel_vec_ = std::vector<T>(4 * nb_bodies_, T{0});
 
     T damping_ = 0.995f;
 
     unsigned int current_read_  = 0u;
     unsigned int current_write_ = 1u;
-
-    unsigned int block_size_;
 };
 
 extern template BodySystemCUDA<float>;

@@ -46,8 +46,6 @@ template <std::floating_point T> class BodySystemCPU {
 
     BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params);
 
-    BodySystemCPU(std::size_t nb_bodies, const NBodyParams& params, std::span<const T> positions, std::span<const T> velocities);
-
     auto reset(const NBodyParams& params, NBodyConfig config) -> void;
 
     auto update(T dt) noexcept -> void;
@@ -66,10 +64,9 @@ template <std::floating_point T> class BodySystemCPU {
  private:
     std::size_t nb_bodies_;
 
-    Coordinates<T> positions_{nb_bodies_};
-    Coordinates<T> velocities_{nb_bodies_};
-    Coordinates<T> dv_{nb_bodies_};
-    std::vector<T> masses_ = std::vector<T>(nb_bodies_);
+    Coordinates<T>         positions_{nb_bodies_};
+    Coordinates<T>         velocities_{nb_bodies_};
+    Coordinates<T>::Vector masses_ = Coordinates<T>::Vector(nb_bodies_);
 
     T softening_squared_ = 0.00125f;
     T damping_           = 0.995f;

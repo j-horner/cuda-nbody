@@ -16,13 +16,6 @@ template <std::floating_point T> class BodySystemCPU;
 class ComputeCPU {
  public:
     ComputeCPU(double fp64_enabled, std::size_t num_bodies, const NBodyParams& params);
-    ComputeCPU(double              fp64_enabled,
-               std::size_t         num_bodies,
-               const NBodyParams&  params,
-               std::vector<float>  positions_fp32,
-               std::vector<float>  velocities_fp32,
-               std::vector<double> positions_fp64,
-               std::vector<double> velocities_fp64);
 
     auto nb_bodies() const noexcept { return nb_bodies_; }
 
