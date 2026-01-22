@@ -97,8 +97,7 @@ ComputeCUDA::ComputeCUDA(bool enable_host_mem, bool use_pbo, double fp64_enabled
             std::println("number of bodies = {}", nb_bodies_);
         }
     } else {
-        // default number of bodies is #SMs * 4 * CTA size
-        nb_bodies_ = num_bodies != 0 ? num_bodies : (block_size * 4) * main_device.multiprocessor_count();
+        nb_bodies_ = (block_size * 16) * main_device.multiprocessor_count();
     }
 
     std::println("> Simulation data stored in {} memory", use_host_mem_ ? "system" : "video");
